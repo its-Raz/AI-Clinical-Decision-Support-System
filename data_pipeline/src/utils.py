@@ -2,12 +2,6 @@ from pinecone import Pinecone, ServerlessSpec
 import tiktoken
 
 
-
-
-
-
-
-
 def get_pinecone_index(PINECONE_API_KEY,PINECONE_INDEX_NAME,embedding_dim):
     pc = Pinecone(api_key=PINECONE_API_KEY)
 

@@ -1,0 +1,23 @@
+knowledge_bases:
+  medline_test:
+    name: "MedlinePlus Test"
+    description: "MedlinePlus medical articles"
+    bm25_index_path: "../../data_pipeline/data/bm25/medline_test_bm25.pkl"
+    pinecone_index_name: "PINECONE_MEDLINE_TEST_INDEX_NAME"  # References .env variable
+    embedding_model: "RPRTHPB-text-embedding-3-small"
+    embedding_dimensions: 512
+    bm25_k: 20
+    vector_k: 20
+    bm25_weight: 0.5
+    vector_weight: 0.5
+    final_k: 10
+
+
+# RRF Configuration
+rrf:
+  c: 60  # Constant for RRF formula: 1 / (rank + c)
+
+# Embedding API Configuration
+embeddings:
+  base_url: "https://api.llmod.ai/v1"
+  api_key_env: "OPENAI_API_KEY"
