@@ -29,6 +29,8 @@ def estimate_medline_test_data_embedding():
             # זו הערכה, כי ב-Chunking אנחנו מוסיפים קצת חפיפה ומטא-דאטה
             full_text = data.get("title", "")
             for section in data.get("sections", []):
+
+
                 full_text += " " + section.get("title", "")
                 full_text += " " + " ".join(section.get("content", []))
 

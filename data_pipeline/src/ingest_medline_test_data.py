@@ -10,10 +10,15 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
+from utils import *
+from bm25_reitriver import *
+
 load_dotenv()
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(current_script_dir, "..", "data", "medlineplus_test_articles", "json")
 
+EMBEDDING_MODEL = "RPRTHPB-text-embedding-3-small"
+EMBEDDING_DIM = 512
 CHUNK_SIZE = 1000
 OVERLAP_PERCENTAGE = 0.20
 chunk_overlap_int = int(CHUNK_SIZE * OVERLAP_PERCENTAGE)
@@ -45,7 +50,9 @@ def process_json_file(file_path):
 
         # איחוד כל הטקסטים ברשימה לטקסט אחד
         content_text = " ".join(section.get("content", []))
-
+        if len(content_text) == 0:
+            print(f'Length of section is 0, Continue')
+            continue
         # Case A: Short Section (< X chars) -> NO SPLIT
         if len(content_text) < CHUNK_SIZE:
             # בניית הפורמט המיוחד שביקשת
@@ -98,8 +105,8 @@ def process_json_file(file_path):
 
 
 if __name__ == "__main__":
-    # 1. טעינת הגדרות מה-Env
-    # שים לב: המפתח חייב להיות ב-.env תחת השם OPENAI_API_KEY או שם אחר שתבחר
+    # Define BM25 index path
+    BM25_INDEX_PATH = os.path.join(current_script_dir, "..", "data", "bm25", "medline_test_bm25.pkl")
     llmod_api_key = os.getenv("OPENAI_API_KEY")
     pinecone_key = os.getenv("PINECONE_API_KEY")
     index_name = os.getenv("PINECONE_MEDLINE_TEST_INDEX_NAME")
@@ -109,40 +116,78 @@ if __name__ == "__main__":
     if not pinecone_key:
         raise ValueError("❌ Error: PINECONE_API_KEY is missing")
 
-    # 2. איסוף הקבצים
+
     json_files = glob.glob(os.path.join(DATA_PATH, "*.json"))
     if not json_files:
         print(f"❌ No JSON files found in {DATA_PATH}")
         exit()
 
     all_documents = []
-    print(f"📂 Processing {len(json_files)} files...")
+    print(f"Processing {len(json_files)} files...")
     for file_path in tqdm(json_files, desc="Parsing JSONs"):
         docs = process_json_file(file_path)
         all_documents.extend(docs)
 
-    print(f"\n📦 Prepared {len(all_documents)} chunks for ingestion.")
+    print(f"\nPrepared {len(all_documents)} chunks for ingestion.")
+    max_tokens=0
+    for doc in all_documents:
+        tokens = estimate_tokens_number(doc.page_content)
+        if tokens > max_tokens:
+            max_tokens = tokens
+    print(f'Max Tokens: {max_tokens}')
+    # ============================================================
+    # 1. Build and Save BM25 Index
+    # ============================================================
+    print("\n" + "=" * 60)
+    print("Building BM25 Index...")
+    print("=" * 60)
 
-    # 3. אתחול מודל ה-Embedding עם הקונפיגורציה של LLMOD
-    print("🔌 Initializing Embeddings via LLMOD.AI...")
 
-    embeddings = OpenAIEmbeddings(
-        model="RPRTHPB-text-embedding-3-small",  # המודל הספציפי שביקשת
-        openai_api_key=llmod_api_key,  # המפתח של LLMOD
-        openai_api_base="https://api.llmod.ai/v1",  # ה-Base URL של LLMOD
-        check_embedding_ctx_length=False  # ביטול בדיקות אורך ספציפיות ל-OpenAI המקורי
+    def extract_titles_from_metadata(doc: Document) -> str:
+        """Extract titles from metadata for BM25 searching"""
+        # Use the correct keys with capital T
+        title = doc.metadata.get('Doc_Title', '')  # Changed from Doc_title
+        subtitle = doc.metadata.get('Sec_Title', '')  # Changed from Sec_title
+        return f"{title} {subtitle}".strip()
+
+
+    bm25_retriever = build_and_save_bm25_index(
+        documents=all_documents,
+        save_path=BM25_INDEX_PATH,
+        text_extraction_fn=extract_titles_from_metadata,
+        overwrite=True
     )
 
-    # 4. שיגור ל-Pinecone
-    print(f"🚀 Uploading to Pinecone Index: '{index_name}'...")
+    print("✓ BM25 index created and saved successfully!")
+    inspect_bm25_index(BM25_INDEX_PATH)
+    # ============================================================
+    # 2. Ingest to Pinecone
+    # ============================================================
 
-    try:
-        PineconeVectorStore.from_documents(
-            documents=all_documents,
-            embedding=embeddings,
-            index_name=index_name
-        )
-        print("\n✅ Ingestion Complete! Vectors are indexed via LLMOD.")
-
-    except Exception as e:
-        print(f"\n❌ Error during upload: {e}")
+    # print("Initializing Embeddings via LLMOD.AI...")
+    #
+    # embeddings = OpenAIEmbeddings(
+    #     model=EMBEDDING_MODEL,
+    #     openai_api_key=llmod_api_key,
+    #     base_url="https://api.llmod.ai/v1",
+    #     check_embedding_ctx_length=True,
+    #     dimensions = EMBEDDING_DIM
+    # )
+    #
+    # print(f'Get index {index_name}')
+    # index = get_pinecone_index(
+    #     PINECONE_API_KEY=pinecone_key,
+    #     PINECONE_INDEX_NAME=index_name,
+    #     embedding_dim=EMBEDDING_DIM
+    # )
+    # print(f"Uploading to Pinecone Index: '{index_name}'...")
+    # try:
+    #     PineconeVectorStore.from_documents(
+    #         documents=all_documents,
+    #         embedding=embeddings,
+    #         index_name=index_name
+    #     )
+    #     print("\nIngestion Complete! Vectors are indexed via LLMOD.")
+    #
+    # except Exception as e:
+    #     print(f"\nError during upload: {e}")
