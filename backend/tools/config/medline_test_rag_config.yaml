@@ -10,7 +10,7 @@ knowledge_bases:
     vector_k: 20
     bm25_weight: 0.5
     vector_weight: 0.5
-    final_k: 10
+    final_k: 8
 
 
 # RRF Configuration

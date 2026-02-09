@@ -55,11 +55,11 @@ def process_json_file(file_path):
             continue
         # Case A: Short Section (< X chars) -> NO SPLIT
         if len(content_text) < CHUNK_SIZE:
-            # בניית הפורמט המיוחד שביקשת
+
             formatted_text = (
                 f"File Title: {doc_title}\n"
                 f"Sub Title: {sec_title}\n"
-                f"Content splitted: no\n"
+                f"Content Splitted: no\n"
                 f"Section: {content_text}"
             )
 
@@ -68,10 +68,10 @@ def process_json_file(file_path):
                 page_content=formatted_text,
                 metadata={
 
-                    "Doc_title": doc_title,
-                    "Sec_title": sec_title,
+                    "Doc_Title": doc_title,
+                    "Sec_Title": sec_title,
                     "Splitted": "no",
-                    "Original_Length": len(content_text)
+                    "Chunk_Index": 0
                 }
             )
             documents.append(doc)
@@ -82,7 +82,7 @@ def process_json_file(file_path):
             chunks = text_splitter.split_text(content_text)
 
             for i, chunk in enumerate(chunks):
-                # פורמט זהה, רק עם התוכן החתוך
+
                 formatted_text = (
                     f"File Title: {doc_title}\n"
                     f"Sub Title: {sec_title}\n"
@@ -164,30 +164,30 @@ if __name__ == "__main__":
     # 2. Ingest to Pinecone
     # ============================================================
 
-    # print("Initializing Embeddings via LLMOD.AI...")
-    #
-    # embeddings = OpenAIEmbeddings(
-    #     model=EMBEDDING_MODEL,
-    #     openai_api_key=llmod_api_key,
-    #     base_url="https://api.llmod.ai/v1",
-    #     check_embedding_ctx_length=True,
-    #     dimensions = EMBEDDING_DIM
-    # )
-    #
-    # print(f'Get index {index_name}')
-    # index = get_pinecone_index(
-    #     PINECONE_API_KEY=pinecone_key,
-    #     PINECONE_INDEX_NAME=index_name,
-    #     embedding_dim=EMBEDDING_DIM
-    # )
-    # print(f"Uploading to Pinecone Index: '{index_name}'...")
-    # try:
-    #     PineconeVectorStore.from_documents(
-    #         documents=all_documents,
-    #         embedding=embeddings,
-    #         index_name=index_name
-    #     )
-    #     print("\nIngestion Complete! Vectors are indexed via LLMOD.")
-    #
-    # except Exception as e:
-    #     print(f"\nError during upload: {e}")
+    print("Initializing Embeddings via LLMOD.AI...")
+
+    embeddings = OpenAIEmbeddings(
+        model=EMBEDDING_MODEL,
+        openai_api_key=llmod_api_key,
+        base_url="https://api.llmod.ai/v1",
+        check_embedding_ctx_length=True,
+        dimensions = EMBEDDING_DIM
+    )
+
+    print(f'Get index {index_name}')
+    index = get_pinecone_index(
+        PINECONE_API_KEY=pinecone_key,
+        PINECONE_INDEX_NAME=index_name,
+        embedding_dim=EMBEDDING_DIM
+    )
+    print(f"Uploading to Pinecone Index: '{index_name}'...")
+    try:
+        PineconeVectorStore.from_documents(
+            documents=all_documents,
+            embedding=embeddings,
+            index_name=index_name
+        )
+        print("\nIngestion Complete! Vectors are indexed via LLMOD.")
+
+    except Exception as e:
+        print(f"\nError during upload: {e}")

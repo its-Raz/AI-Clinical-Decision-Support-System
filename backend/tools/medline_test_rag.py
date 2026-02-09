@@ -4,7 +4,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, field_validator
 import yaml
 from dotenv import load_dotenv
-
+import numpy as np
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
@@ -216,22 +216,46 @@ class MedlineTestRAG:
 
 ```
         """
-        k = k or self.kb_config.k
+        k = k or self.kb_config.final_k
 
         print(f"\nQuerying: '{query}'")
-        print(f"  - Using EnsembleRetriever with RRF")
-        print(f"  - Weights: BM25={self.kb_config.bm25_weight}, Vector={self.kb_config.vector_weight}")
+        # print(f"  - Using EnsembleRetriever with RRF")
+        # print(f"  - Weights: BM25={self.kb_config.bm25_weight}, Vector={self.kb_config.vector_weight}")
 
-        # Use EnsembleRetriever (automatically does RRF)
-        results = self.ensemble_retriever.invoke(query)
 
-        # Return top k results
-        results = results[:k]
+        raw_results = self.ensemble_retriever.invoke(query)
 
-        print(f"✓ Returning top {len(results)} results")
 
-        return results
+        unique_results = []
+        seen_signatures = set()
 
+        for doc in raw_results:
+
+            doc_title = str(doc.metadata.get('Doc_Title', '')).strip()
+            sec_title = str(doc.metadata.get('Sec_Title', '')).strip()
+
+
+            raw_idx = doc.metadata.get('Chunk_Index', 0)
+            try:
+                chunk_index = int(float(raw_idx))
+            except:
+                chunk_index = 0
+
+
+            signature = (doc_title, sec_title, chunk_index)
+
+            if signature not in seen_signatures:
+                unique_results.append(doc)
+                seen_signatures.add(signature)
+
+            # עצירה כשהגענו לכמות הרצויה
+            if len(unique_results) >= k:
+                break
+
+        print(f"✓ Original: {len(raw_results)} -> Unique: {len(unique_results)}")
+        print(f"✓ Returning top {len(unique_results)} results")
+
+        return unique_results
     def get_full_content(self, doc: Document) -> str:
         """
         Get full content from a document.
@@ -243,7 +267,7 @@ class MedlineTestRAG:
 
     def query_bm25_only(self, query: str, k: Optional[int] = None) -> List[Document]:
         """Query using BM25 only (keyword search)."""
-        k = k or self.kb_config.k
+        k = k or self.kb_config.final_k
         original_k = self.bm25_retriever.k
         self.bm25_retriever.k = k
 
@@ -254,7 +278,7 @@ class MedlineTestRAG:
 
     def query_vector_only(self, query: str, k: Optional[int] = None) -> List[Document]:
         """Query using vector search only (semantic search)."""
-        k = k or self.kb_config.k
+        k = k or self.kb_config.final_k
 
         # Temporarily update search_kwargs
         original_k = self.vector_retriever.search_kwargs.get('k', 10)
@@ -282,8 +306,7 @@ def example_basic_usage():
 
     # Query using hybrid search (BM25 + Vector with RRF)
     results = rag.query(
-        query="Acetaminophen Level",
-        k=10
+        query="Acetaminophen Level"
     )
 
     print(f"\nTop {len(results)} results (ranked by RRF):\n")
