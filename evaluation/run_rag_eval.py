@@ -90,8 +90,11 @@ async def medline_test_rag_evaluation(golden_set_path, lookup_csv_path,bm25_weig
         print(f"Successfully loaded {len(data)} test questions.\n")
 
         # 3. Initialize RAG
+
         rag = create_medline_test_rag()
-        rag.ensemble_retriever.weights = [bm25_weight, vector_weight]
+        return
+        if bm25_weight > 0 and vector_weight > 0:
+            rag.ensemble_retriever.weights = [bm25_weight, vector_weight]
         print(f"Running Eval with weights: BM25={bm25_weight}, Vector={vector_weight}...\n")
         # 4. Iterate through questions
         for i, item in enumerate(data):
@@ -177,9 +180,9 @@ async def run_experiments_and_plot():
 
     # שלושת הקונפיגורציות
     configs = [
-        (1.0, 0.0, "BM25 Only"),
+        # (1.0, 0.0, "BM25 Only"),
         (0.0, 1.0, "Vector Only"),
-        (0.5, 0.5, "Hybrid (RRF)")
+        # (0.5, 0.5, "Hybrid (RRF)")
     ]
 
     # שמירת התוצאות
@@ -225,7 +228,7 @@ async def run_experiments_and_plot():
 
     # עיצוב הגרף
     ax.set_ylabel('Score (0-1)')
-    ax.set_title('RAG Evaluation: BM25 vs Vector vs Hybrid')
+    ax.set_title('RAG Evaluation: k=8 with reranker')
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.set_ylim(0, 1.1)  # קצת רווח למעלה לתוויות
@@ -248,7 +251,7 @@ async def run_experiments_and_plot():
     autolabel(rects4)
 
     plt.tight_layout()
-    output_file = 'rag_evaluation_results.png'
+    output_file = 'rag_evaluation_results_k=5_reranker.png'
     plt.savefig(output_file)
     print(f"✅ Plot saved to {output_file}")
 

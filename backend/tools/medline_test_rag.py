@@ -10,7 +10,8 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
-
+from sentence_transformers import CrossEncoder
+from langchain_openai import ChatOpenAI
 # Load environment variables
 load_dotenv()
 
@@ -25,6 +26,7 @@ class KnowledgeBaseConfig(BaseModel):
     bm25_index_path: str = Field(..., description="Path to BM25 index file")
     pinecone_index_name: str = Field(..., description="Environment variable name for Pinecone index")
     embedding_model: str = Field(..., description="Embedding model name")
+    LLM_model: str = Field(..., description="LLN model name")
     embedding_dimensions: int = Field(..., description="Embedding dimensions")
     bm25_k: int = Field(default=20, description="Number of results from BM25")
     vector_k: int = Field(default=20, description="Number of results from vector search")
@@ -59,6 +61,31 @@ class RRFConfig(BaseModel):
 
     c: int = Field(default=60, description="Constant for RRF formula: 1 / (rank + c)")
 
+class RerankerConfig(BaseModel):
+    """Configuration for Reranker."""
+    use_reranker: bool = Field(default=False, description="Whether to use reranker")
+    model_name: str = Field(default="cross-encoder/ms-marco-MiniLM-L-6-v2", description="Cross encoder model name")
+    top_k: int = Field(default=5, description="Number of results to return after reranking")
+
+    @field_validator('use_reranker', mode='before')
+    def convert_yes_no(cls, v):
+        """Convert 'yes'/'no' strings to boolean."""
+        if isinstance(v, str):
+            return v.lower() in ('yes', 'true', '1')
+        return bool(v)
+
+class LLMConfig(BaseModel):
+    """Configuration for LLM"""
+
+    base_url: str = Field(..., description="API base URL")
+    api_key_env: str = Field(..., description="Environment variable name for API key")
+    @field_validator('api_key_env')
+    def validate_api_key(cls, v):
+        """Ensure API key exists in environment."""
+        api_key = os.getenv(v)
+        if not api_key:
+            raise ValueError(f"Environment variable '{v}' not found in .env file")
+        return v
 
 class EmbeddingsConfig(BaseModel):
     """Configuration for embeddings API."""
@@ -80,6 +107,8 @@ class RAGConfig(BaseModel):
     knowledge_bases: Dict[str, KnowledgeBaseConfig]
     rrf: RRFConfig
     embeddings: EmbeddingsConfig
+    reranker: RerankerConfig
+    LLM: LLMConfig
 
     @classmethod
     def from_yaml(cls, config_path: str) -> "RAGConfig":
@@ -133,11 +162,19 @@ class MedlineTestRAG:
 
         # Initialize components
         self._initialize_embeddings()
-        self._initialize_bm25_retriever()
-        self._initialize_vector_retriever()
-        self._initialize_ensemble_retriever()
+        self._initialize_LLM()
+        if self.config.reranker.use_reranker:
+            self._initialize_reranker()
 
-        print(f"RAG system ready!")
+        if self.kb_config.bm25_weight > 0:
+            self._initialize_bm25_retriever()
+
+        if self.kb_config.vector_weight > 0:
+            self._initialize_vector_retriever()
+
+        if self.kb_config.bm25_weight > 0 and self.kb_config.vector_weight > 0:
+            self._initialize_ensemble_retriever()
+        print(f"✓ RAG system ready!")
 
     def _initialize_embeddings(self):
         """Initialize OpenAI embeddings via LLMOD."""
@@ -151,7 +188,26 @@ class MedlineTestRAG:
         )
 
         print(f"Embeddings initialized: {self.kb_config.embedding_model}")
+    def _initialize_LLM(self):
+        """Initialize OpenAI embeddings via LLMOD."""
+        api_key = os.getenv(self.config.LLM.api_key_env)
 
+        self.LLM = OpenAIEmbeddings(
+            model=self.kb_config.LLM_model,
+            openai_api_key=api_key,
+            base_url=self.config.LLM.base_url
+
+        )
+
+        print(f"LLM initialized: {self.kb_config.LLM_model}")
+
+    def _initialize_reranker(self):
+        """Initialize cross-encoder reranker."""
+        print(f"Loading reranker model: {self.config.reranker.model_name}")
+
+        self.reranker = CrossEncoder(self.config.reranker.model_name)
+
+        print(f"✓ Reranker initialized: {self.config.reranker.model_name}")
     def _initialize_bm25_retriever(self):
         """Load BM25 index from disk."""
         import pickle
@@ -206,41 +262,20 @@ class MedlineTestRAG:
 
         print(f"✓ EnsembleRetriever created (using RRF)")
 
-    def query(
-            self,
-            query: str,
-            k: Optional[int] = None
-    ) -> List[Document]:
-        """
-        Query the knowledge base using hybrid search with RRF.
-
-```
-        """
-        k = k or self.kb_config.final_k
-
-        print(f"\nQuerying: '{query}'")
-        # print(f"  - Using EnsembleRetriever with RRF")
-        # print(f"  - Weights: BM25={self.kb_config.bm25_weight}, Vector={self.kb_config.vector_weight}")
-
-
-        raw_results = self.ensemble_retriever.invoke(query)
-
-
+    def _deduplicate_results(self, results: List[Document]) -> List[Document]:
         unique_results = []
         seen_signatures = set()
 
-        for doc in raw_results:
-
+        for doc in results:
             doc_title = str(doc.metadata.get('Doc_Title', '')).strip()
             sec_title = str(doc.metadata.get('Sec_Title', '')).strip()
 
-
-            raw_idx = doc.metadata.get('Chunk_Index', 0)
+            raw_idx = doc.metadata.get('Chunk_Index')
             try:
-                chunk_index = int(float(raw_idx))
-            except:
-                chunk_index = 0
-
+                chunk_index = int(float(raw_idx)) if raw_idx is not None else None
+            except (ValueError, TypeError) as e:
+                print(f"⚠️ Warning: Invalid Chunk_Index '{raw_idx}' for {doc_title}/{sec_title}")
+                chunk_index = None  # Or use a sentinel value like -1
 
             signature = (doc_title, sec_title, chunk_index)
 
@@ -248,14 +283,101 @@ class MedlineTestRAG:
                 unique_results.append(doc)
                 seen_signatures.add(signature)
 
-            # עצירה כשהגענו לכמות הרצויה
-            if len(unique_results) >= k:
-                break
-
-        print(f"✓ Original: {len(raw_results)} -> Unique: {len(unique_results)}")
-        print(f"✓ Returning top {len(unique_results)} results")
-
         return unique_results
+
+    def _rerank_results(self, query: str, results: List[Document], k: int) -> List[Document]:
+        """
+        Rerank results using cross-encoder model.
+
+        Args:
+            query: Search query
+            results: Initial retrieved results
+            k: Number of top results to return after reranking
+
+        Returns:
+            Reranked list of documents
+        """
+        if not results:
+            return results
+
+
+        # Prepare query-document pairs
+        pairs = [[query, self.get_full_content(doc)] for doc in results]
+
+        # Get reranking scores
+        scores = self.reranker.predict(pairs)
+
+        # Sort by scores (descending)
+        scored_results = list(zip(results, scores))
+
+        scored_results.sort(key=lambda x: x[1], reverse=True)
+
+        # Return top k
+        reranked = [doc for doc, score in scored_results[:k]]
+
+        print(f"✓ Reranked {len(results)} -> {len(reranked)} results")
+
+        return reranked
+
+    def query(
+            self,
+            query: str,
+            k: Optional[int] = None
+    ) -> List[Document]:
+        """
+        Query the knowledge base using hybrid search with RRF and optional reranking.
+
+        Args:
+            query: Search query string
+            k: Number of final results to return (uses config.final_k if None)
+
+        Returns:
+            List of Document objects ranked by relevance
+        """
+        k = k or self.kb_config.final_k
+
+        print(f"\n{'=' * 60}")
+        print(f"Query: '{query}'")
+        print(f"{'=' * 60}")
+
+        # Determine which retrieval method to use
+        if self.kb_config.bm25_weight > 0 and self.kb_config.vector_weight > 0:
+            # Use ensemble (hybrid) retrieval with RRF
+            print("Using: Hybrid search (BM25 + Vector + RRF)")
+            raw_results = self.ensemble_retriever.invoke(query)
+
+        elif self.kb_config.bm25_weight > 0:
+            # BM25 only
+            print("Using: BM25 only")
+            raw_results = self.query_bm25_only(query, k=self.kb_config.bm25_k)
+
+        elif self.kb_config.vector_weight > 0:
+            # Vector only
+            print("Using: Vector search only")
+            raw_results = self.query_vector_only(query, k=self.kb_config.vector_k)
+
+        else:
+            raise ValueError("At least one of bm25_weight or vector_weight must be > 0")
+
+        print(f"✓ Retrieved {len(raw_results)} initial results")
+
+        # Deduplicate results
+        # If using reranker, get more candidates before reranking
+
+        unique_results = self._deduplicate_results(raw_results)
+
+        print(f"✓ After deduplication: {len(unique_results)} unique results")
+
+        # Apply reranking if enabled
+        if self.config.reranker.use_reranker and len(unique_results) > 0:
+            final_results = self._rerank_results(query, unique_results, k=k)
+        else:
+            final_results = unique_results[:k]
+
+        print(f"✓ Returning {len(final_results)} final results")
+        print(f"{'=' * 60}\n")
+
+        return final_results
     def get_full_content(self, doc: Document) -> str:
         """
         Get full content from a document.
@@ -290,7 +412,9 @@ class MedlineTestRAG:
         self.vector_retriever.search_kwargs['k'] = original_k
         return results
 
+    def build_augmented_prompt
 
+    def answer_question
 # Convenience functions for each knowledge base
 
 def create_medline_test_rag(config_path: Optional[str] = None) -> MedlineTestRAG:
