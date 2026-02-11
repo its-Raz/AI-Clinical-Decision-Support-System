@@ -92,7 +92,7 @@ async def medline_test_rag_evaluation(golden_set_path, lookup_csv_path,bm25_weig
         # 3. Initialize RAG
 
         rag = create_medline_test_rag()
-        return
+
         if bm25_weight > 0 and vector_weight > 0:
             rag.ensemble_retriever.weights = [bm25_weight, vector_weight]
         print(f"Running Eval with weights: BM25={bm25_weight}, Vector={vector_weight}...\n")

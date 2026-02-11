@@ -12,6 +12,7 @@ from langchain.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
 from sentence_transformers import CrossEncoder
 from langchain_openai import ChatOpenAI
+from prompts import MEDLINE_TEST_SYSTEM_PROMPT, MEDLINE_TEST_QUERY_PROMPT
 # Load environment variables
 load_dotenv()
 
@@ -79,6 +80,7 @@ class LLMConfig(BaseModel):
 
     base_url: str = Field(..., description="API base URL")
     api_key_env: str = Field(..., description="Environment variable name for API key")
+    max_tokens: int = Field(default=500, description="Number of max_tokens")
     @field_validator('api_key_env')
     def validate_api_key(cls, v):
         """Ensure API key exists in environment."""
@@ -163,6 +165,7 @@ class MedlineTestRAG:
         # Initialize components
         self._initialize_embeddings()
         self._initialize_LLM()
+        self._load_prompts()
         if self.config.reranker.use_reranker:
             self._initialize_reranker()
 
@@ -192,14 +195,25 @@ class MedlineTestRAG:
         """Initialize OpenAI embeddings via LLMOD."""
         api_key = os.getenv(self.config.LLM.api_key_env)
 
-        self.LLM = OpenAIEmbeddings(
+        self.LLM = ChatOpenAI(
             model=self.kb_config.LLM_model,
             openai_api_key=api_key,
-            base_url=self.config.LLM.base_url
+            base_url=self.config.LLM.base_url,
+            temperature = 1,
+            max_tokens = self.config.LLM.max_tokens
 
         )
 
         print(f"LLM initialized: {self.kb_config.LLM_model}")
+
+    def _load_prompts(self):
+        """Load prompts for this knowledge base."""
+        if self.kb_name == "medline_test":
+
+            self.system_prompt = MEDLINE_TEST_SYSTEM_PROMPT
+            self.query_template = MEDLINE_TEST_QUERY_PROMPT
+        else:
+            raise ValueError(f"No prompts defined for knowledge base: {self.kb_name}")
 
     def _initialize_reranker(self):
         """Initialize cross-encoder reranker."""
@@ -412,9 +426,133 @@ class MedlineTestRAG:
         self.vector_retriever.search_kwargs['k'] = original_k
         return results
 
-    def build_augmented_prompt
+    def build_augmented_prompt(
+            self,
+            query: str,
+            retrieved_docs: List[Document]
+    ) -> str:
+        """
+        Build augmented prompt by combining query with retrieved context.
 
-    def answer_question
+        Args:
+            query: User's question
+            retrieved_docs: List of retrieved documents
+
+        Returns:
+            Formatted prompt string with context and query
+        """
+
+
+        # Build context from retrieved documents
+        context_parts = []
+        for i, doc in enumerate(retrieved_docs, 1):
+            # doc_title = doc.metadata.get('Doc_Title', 'Unknown Document')
+            # sec_title = doc.metadata.get('Sec_Title', 'Unknown Section')
+            # chunk_index = doc.metadata.get("Chunk_Index","Unknown Chunk Index")
+            # splitted = doc.metadata.get("Splitted","Unknown")
+            content = self.get_full_content(doc)
+
+            context_parts.append(
+                f"[Source {i}]\n{content}"
+            )
+
+        context = "\n\n".join(context_parts)
+
+        # Format the query prompt with context and question
+        # Assuming the query_template has placeholders for {context} and {question}
+        augmented_prompt = self.query_template.format(
+            context=context,
+            question=query
+        )
+
+
+
+        return augmented_prompt
+
+    def answer_question(
+            self,
+            question: str,
+            k: Optional[int] = None,
+            return_sources: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Answer a question using RAG pipeline.
+
+        Args:
+            question: User's question
+            k: Number of documents to retrieve (uses config.final_k if None)
+            return_sources: Whether to include source documents in response
+
+        Returns:
+            Dictionary containing:
+                - answer: Generated answer
+                - sources: List of source documents (if return_sources=True)
+                - query: Original question
+        """
+        # Input validation
+        if not question or not question.strip():
+            raise ValueError("Question cannot be empty")
+
+        print(f"\n{'*' * 60}")
+        print(f"ANSWERING QUESTION")
+        print(f"{'*' * 60}")
+
+        # Step 1: Retrieve relevant documents
+        print("\n[1/3] Retrieving relevant documents...")
+        retrieved_docs = self.query(query=question, k=k)
+
+        if not retrieved_docs:
+            return {
+                "answer": "I couldn't find any relevant information to answer your question.",
+                "sources": [],
+                "query": question
+            }
+
+        print(f"✓ Retrieved {len(retrieved_docs)} relevant documents")
+
+        # Step 2: Build context and user message
+        print("\n[2/3] Building prompts with context...")
+
+        user_message = self.build_augmented_prompt(question, retrieved_docs)
+        print("✓ System")
+        print(self.system_prompt)
+        print("✓ User")
+        print(user_message)
+        print("✓ Prompts constructed")
+
+        # Step 3: Generate answer using LLM
+        print("\n[3/3] Generating answer...")
+
+        try:
+            messages = [
+                ("system", self.system_prompt),
+                ("human", user_message)
+            ]
+            response = self.LLM.invoke(messages)
+            answer = response.content
+            print("✓ Answer generated")
+            print(answer)
+        except Exception as e:
+            print(f"✗ Error generating answer: {e}")
+            return {
+                "answer": f"Error generating answer: {str(e)}",
+                "sources": retrieved_docs if return_sources else [],
+                "query": question
+            }
+
+        print(f"{'*' * 60}\n")
+
+        # Build response
+        result = {
+            "answer": answer,
+            "query": question
+        }
+
+        if return_sources:
+            result["sources"] = retrieved_docs
+
+        return result
+
 # Convenience functions for each knowledge base
 
 def create_medline_test_rag(config_path: Optional[str] = None) -> MedlineTestRAG:
@@ -427,19 +565,19 @@ def example_basic_usage():
 
     # Initialize RAG (automatically uses EnsembleRetriever with RRF)
     rag = create_medline_test_rag()
-
-    # Query using hybrid search (BM25 + Vector with RRF)
-    results = rag.query(
-        query="Acetaminophen Level"
-    )
-
-    print(f"\nTop {len(results)} results (ranked by RRF):\n")
-
-    for i, doc in enumerate(results, 1):
-        full_content = rag.get_full_content(doc)
-        print(f"{i}. {doc.metadata.get('Doc_Title')} - {doc.metadata.get('Sec_Title')}")
-        print(f"   {full_content[:200]}...")
-        print()
+    rag.answer_question("What are the primary risks associated with a 17-hydroxyprogesterone blood test?")
+    # # Query using hybrid search (BM25 + Vector with RRF)
+    # results = rag.query(
+    #     query="Acetaminophen Level"
+    # )
+    #
+    # print(f"\nTop {len(results)} results (ranked by RRF):\n")
+    #
+    # for i, doc in enumerate(results, 1):
+    #     full_content = rag.get_full_content(doc)
+    #     print(f"{i}. {doc.metadata.get('Doc_Title')} - {doc.metadata.get('Sec_Title')}")
+    #     print(f"   {full_content[:200]}...")
+    #     print()
 
 if __name__ == "__main__":
     example_basic_usage()
