@@ -12,7 +12,7 @@ from langchain.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
 from sentence_transformers import CrossEncoder
 from langchain_openai import ChatOpenAI
-from prompts import MEDLINE_TEST_SYSTEM_PROMPT, MEDLINE_TEST_QUERY_PROMPT
+from .prompts import MEDLINE_TEST_SYSTEM_PROMPT, MEDLINE_TEST_QUERY_PROMPT
 # Load environment variables
 load_dotenv()
 

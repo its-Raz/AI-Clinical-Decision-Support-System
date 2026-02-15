@@ -1,0 +1,52 @@
+[
+  {
+    "test_case": "P002 - Prediabetes",
+    "status": "PASS",
+    "overall_score": 0.8,
+    "tool_usage": {
+      "tools_called": [
+        "get_patient_history",
+        "check_reference_range",
+        "search_medical_knowledge"
+      ],
+      "expected_tools": [
+        "get_patient_history",
+        "check_reference_range",
+        "search_medical_knowledge"
+      ],
+      "missing_tools": [],
+      "extra_tools": [],
+      "score": 1.0,
+      "passed": true
+    },
+    "efficiency": {
+      "iterations_used": 3,
+      "max_iterations": 5,
+      "tools_used": 3,
+      "min_tools_required": 3,
+      "efficiency_score": 1.0,
+      "passed": true
+    },
+    "completeness": {
+      "has_patient_history": true,
+      "has_reference_check": true,
+      "has_medical_knowledge": true,
+      "completeness_score": 1.0,
+      "passed": true
+    },
+    "quality": {
+      "summary_length": 0,
+      "expected_keywords": [
+        "prediabetes",
+        "glucose",
+        "lifestyle",
+        "rising"
+      ],
+      "keywords_found": [],
+      "keyword_score": 0.0,
+      "quality_score": 0.0,
+      "passed": false
+    },
+    "summary": ""
+  }
+]

@@ -29,5 +29,5 @@ reranker:
 
 LLM:
   base_url: "https://api.llmod.ai/v1"
-  api_key_env: "OPENAI_API_KEY",
+  api_key_env: "OPENAI_API_KEY"
   max_tokens: 500
