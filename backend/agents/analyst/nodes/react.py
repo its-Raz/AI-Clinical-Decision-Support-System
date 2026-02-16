@@ -15,10 +15,10 @@ import os
 load_dotenv()
 
 # Import tools
-from ..tools import get_patient_history, check_reference_range, search_medical_knowledge
+from backend.agents.analyst.react_agent.tools import get_patient_history, check_reference_range, search_medical_knowledge
 
 # Import prompts
-from ..prompts import REACT_SYSTEM_PROMPT, REACT_PROMPT_TEMPLATE
+from backend.agents.analyst.react_agent.prompts import REACT_SYSTEM_PROMPT, REACT_PROMPT_TEMPLATE
 
 # Load config
 config_path = os.path.join(os.path.dirname(__file__), '..', 'config.yaml')
@@ -71,17 +71,37 @@ def react_node(state: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     # Tools
+
     tools = [get_patient_history, check_reference_range, search_medical_knowledge]
 
     # Prompt
+    # *MessagesPlaceholder("agent_scratchpad")**
+    # This is a **dynamic placeholder** that gets filled during agent execution:
+    # **"agent_scratchpad"** stores the agent's reasoning history
     prompt = ChatPromptTemplate.from_messages([
         ("system", REACT_SYSTEM_PROMPT),
         ("human", REACT_PROMPT_TEMPLATE),
         MessagesPlaceholder("agent_scratchpad")
     ])
 
-    # Create agent
+    # Create tools agent, How it works:
+    # Converts your tools into function schemas (JSON format)
+    # The LLM receives these schemas in its prompt
+    # The LLM can respond with structured tool calls (like OpenAI's function calling)
+    # The agent automatically parses these calls and executes the tools
+
     agent = create_tool_calling_agent(llm, tools, prompt)
+
+    # AgentExecutor is a runtime loop that orchestrates the agent's execution
+    # How it works:
+    # 1. Send user input to agent
+    # 2. Agent returns: either final answer OR tool call(s)
+    # 3. If tool call(s):
+    #    a. Execute the tool(s)
+    #    b. Add results to agent_scratchpad
+    #    c. Go to step 2 (up to max_iterations)
+    # 4. Return final answer
+
     agent_executor = AgentExecutor(
         agent=agent,
         tools=tools,
@@ -91,10 +111,8 @@ def react_node(state: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     # Build input
-    user_input = f"""Patient: {patient_id} ({patient_info.get('age')}yo {patient_info.get('sex')})
-Lab: {lab_result.get('test_name')} = {lab_result.get('value')} {lab_result.get('unit')} (Flag: {lab_result.get('flag', 'N/A')})
-
-Gather patient history, check reference ranges, and search medical causes."""
+    user_input = f"""Lab Result: Patient: {patient_id} ({patient_info.get('age')}yo {patient_info.get('sex')})
+    Lab: {lab_result.get('test_name')} = {lab_result.get('value')} {lab_result.get('unit')} (Flag: {lab_result.get('flag', 'N/A')})"""
     print(f'---- USER INPUT ----')
     print(user_input)
     # Execute
@@ -128,14 +146,28 @@ Gather patient history, check reference ranges, and search medical causes."""
 
         agent_summary = result.get("output", "")
 
+
+        # If summary is empty, generate one from observations
+        if not agent_summary or len(agent_summary) < 10:
+            print("⚠️  Agent returned empty summary, generating fallback...")
+
+            # Simple fallback: concatenate key findings
+            observations_text = []
+            if "get_patient_history" in observations:
+                observations_text.append(f"Patient history retrieved")
+            if "check_reference_range" in observations:
+                ref_check = observations["check_reference_range"][0]
+                observations_text.append(f"Value: {ref_check['status']}")
+            if "search_medical_knowledge" in observations:
+                observations_text.append("Medical causes researched")
+
+            agent_summary = " | ".join(observations_text)
+
         print(f"\n📊 ReAct Summary:")
         print(f"   Tools used: {len(tool_calls)}")
         print(f"   Iterations: {len(result.get('intermediate_steps', []))}")
         print(f"   Summary: {agent_summary}...")
-        print(f'Agent Results:')
-        print(result)
-        print(f'Agent Observations: ')
-        print(observations)
+
         return {
             "observations": observations,
             "tool_calls": tool_calls,

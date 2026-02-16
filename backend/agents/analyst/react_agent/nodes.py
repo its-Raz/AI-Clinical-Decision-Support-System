@@ -1,0 +1,135 @@
+"""
+Node functions for ReAct agent.
+"""
+
+from langchain_core.messages import ToolMessage
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from . import ReActAgent
+
+from state import ReActInternalState
+import json
+from utils import _print_messages,_print_response
+
+def _format_tool_result(tool_name: str, result: any) -> str:
+    """
+    Format tool results into human-readable text instead of dict strings.
+
+    Args:
+        tool_name: Name of the tool
+        result: Raw tool result
+
+    Returns:
+        Formatted string
+    """
+    if tool_name == "get_patient_history":
+        # Format patient history nicely
+        if isinstance(result, dict):
+            formatted = f"""Patient: {result.get('name', 'Unknown')} ({result.get('age', '?')}yo {result.get('sex', '?')})
+
+Chronic Conditions:
+{', '.join(result.get('chronic_conditions', [])) or 'None'}
+
+Lab History (Hemoglobin trend):
+"""
+            for entry in result.get('lab_history', []):
+                hgb = entry.get('Hemoglobin', {})
+                formatted += f"  {entry.get('date', '?')}: {hgb.get('value', '?')} {hgb.get('unit', '')} ({hgb.get('flag', 'unknown')})\n"
+
+            formatted += "\nRecent Clinical Notes:\n"
+            for note in result.get('recent_notes', []):
+                formatted += f"  - {note}\n"
+
+            return formatted.strip()
+
+    elif tool_name == "check_reference_range":
+        # Format reference range check nicely
+        if isinstance(result, dict):
+            return f"""Test: {result.get('test_name', '?')} = {result.get('value', '?')} {result.get('unit', '')}
+Reference Range: {result.get('reference_range', '?')}
+Status: {result.get('status', '?')} ({result.get('severity', '?')})
+Interpretation: {result.get('interpretation', '?')}"""
+
+
+
+    # Fallback: return as-is but try to make it cleaner
+    if isinstance(result, dict):
+        return json.dumps(result, indent=2)
+    return str(result)
+
+
+def call_tool(agent: 'ReActAgent', state: ReActInternalState) -> dict:
+    """
+    Tool node: Execute tools requested by the model.
+
+    Args:
+        agent: ReActAgent instance
+        state: Current agent state
+
+    Returns:
+        Dict with tool results as messages and updated tool_calls_history
+    """
+    outputs = []
+    tool_history = []
+
+    # Iterate over tool calls in the last message
+    for tool_call in state["messages"][-1].tool_calls:
+        print(f"🔧 Calling: {tool_call['name']}")
+
+        # Get the tool and invoke it
+        tool_result = agent.tools_by_name[tool_call["name"]].invoke(tool_call["args"])
+
+        print(f"   ✅ Result: {str(tool_result)[:80]}...")
+        if tool_call["name"] == "check_reference_range" or tool_call["name"] == "get_patient_history":
+            # Format result for better LLM readability
+            tool_result = _format_tool_result(tool_call["name"], tool_result)
+
+        # Create ToolMessage with formatted result
+        outputs.append(
+            ToolMessage(
+                content=tool_result,  # ← Use formatted version
+                name=tool_call["name"],
+                tool_call_id=tool_call["id"],
+            )
+        )
+
+        # Record in history (keep raw result)
+        tool_history.append({
+            "tool": tool_call["name"],
+            "args": tool_call["args"],
+            "result": str(tool_result)  # Keep original for debugging
+        })
+
+    # Combine with existing history
+    updated_history = state.get("tool_calls_history", []) + tool_history
+
+    return {
+        "messages": outputs,
+        "tool_calls_history": updated_history
+    }
+
+
+def call_model(agent: 'ReActAgent', state: ReActInternalState) -> dict:
+    """
+    Model node: Invoke the LLM.
+
+    Args:
+        agent: ReActAgent instance
+        state: Current agent state
+
+    Returns:
+        Dict with model response
+    """
+    print(f"\n--- Iteration {state['iterations'] + 1}/{agent.max_iterations} ---")
+
+    # Invoke the model with current messages
+
+    _print_messages(state["messages"])
+    response = agent.model.invoke(state["messages"])
+    _print_response(response)
+    # Return as list (will be added to messages by add_messages reducer)
+    return {
+        "messages": [response],
+        "iterations": state["iterations"] + 1
+    }
