@@ -565,7 +565,7 @@ def example_basic_usage():
 
     # Initialize RAG (automatically uses EnsembleRetriever with RRF)
     rag = create_medline_test_rag()
-    rag.answer_question("What are the primary risks associated with a 17-hydroxyprogesterone blood test?")
+    rag.answer_question("What are the primary risks associated with a 17-hydroxyprogesterone blood test_images?")
     # # Query using hybrid search (BM25 + Vector with RRF)
     # results = rag.query(
     #     query="Acetaminophen Level"

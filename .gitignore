@@ -27,5 +27,6 @@ ENV/
 
 # Data Files
 data/
+skin_care_classifier/
 *.pdf
 *.csv

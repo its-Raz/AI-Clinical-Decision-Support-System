@@ -475,7 +475,7 @@ def main():
                 print(f"  No articles found for {letter}, skipping...")
                 continue
 
-            # Limit if in test mode
+            # Limit if in test_images mode
             if args.max_per_letter:
                 article_links = article_links[:args.max_per_letter]
                 print(f"  Limited to {len(article_links)} articles (--max-per-letter)")

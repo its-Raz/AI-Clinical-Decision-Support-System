@@ -192,7 +192,7 @@ class MedlinePlusBulkScraper:
 
     def get_all_article_urls(self) -> List[str]:
         """
-        Extract all lab test article URLs from the index page
+        Extract all lab test_images article URLs from the index page
 
         Returns:
             List of article URLs
@@ -211,7 +211,7 @@ class MedlinePlusBulkScraper:
 
         for link in links:
             href = link['href']
-            # Filter for lab test article URLs
+            # Filter for lab test_images article URLs
             if '/lab-tests/' in href and href != '/lab-tests/':
                 full_url = urljoin(self.base_url, href)
                 # Avoid duplicates and filter out non-article pages
