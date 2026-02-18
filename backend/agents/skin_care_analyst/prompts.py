@@ -17,19 +17,39 @@ IMPORTANT GUIDELINES:
 - Maintain a professional, empathetic tone at all times."""
 
 
-REPORT_PROMPT_TEMPLATE = """You are a clinical assistant. Below is the output from an AI skin \
+REPORT_PROMPT_TEMPLATE = """You are a dermatology clinical assistant. Below is the output from an AI skin \
 lesion detection model for patient {patient_id}.
 
 MODEL RESULTS:
-- Urgency Label  : {label}
+- Urgency Classification: {label}
 - Clinical Finding: {finding}
-- Confidence     : {conf_pct}%
-- Detected Area  : Bounding box at coordinates {bbox}
+- Confidence Level: {conf_pct}%
+- Detection Location: Bounding box coordinates {bbox}
 
-Based on these results, write a brief clinical summary report (3–4 sentences) for the patient that:
-1. States the AI model's finding ("{finding}") and confidence level.
-2. Provides a recommendation appropriate to the urgency level.
-3. Clearly disclaims that this is NOT a final diagnosis.
-4. Advises the patient to consult a physician{urgency_addendum}.
+Generate a structured clinical summary with these sections:
 
-Report:"""
+**SECTION 1: DETECTION SUMMARY**
+State what the model detected and the confidence level in 1-2 sentences.
+
+**SECTION 2: CLINICAL SIGNIFICANCE**
+Explain what "{finding}" means in clinical terms (2-3 sentences):
+- What type of lesion this typically represents
+- Why the urgency classification is "{label}"
+- Any relevant clinical context
+
+**SECTION 3: RECOMMENDED ACTIONS**
+Based on urgency level, provide specific recommendations:
+- If "High Urgency": Emphasize need for immediate dermatologist evaluation (within 24-48 hours)
+- If "Low Urgency": Recommend routine dermatologist check-up for confirmation
+- Suggest monitoring for changes (size, color, shape, symptoms)
+- Mention documentation (photos over time)
+
+**SECTION 4: LIMITATIONS**
+Clearly state:
+- This is a preliminary AI screening, NOT a diagnosis
+- Only a dermatologist can provide definitive diagnosis
+- The model has limitations and cannot replace professional examination
+
+Keep language precise but accessible. Use 150-200 words total.
+
+Clinical Summary:"""

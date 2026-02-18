@@ -50,7 +50,7 @@ class ManagerAgent:
 
         self.llm = ChatOpenAI(
             model=cfg["model"],
-            temperature=cfg.get("temperature", 0.2),
+            temperature=cfg.get("temperature", 1),
             openai_api_key=api_key,
             base_url=cfg.get("base_url"),
             max_tokens=cfg.get("max_tokens"),

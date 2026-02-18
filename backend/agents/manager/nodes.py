@@ -88,15 +88,26 @@ def deliver_node(state: dict, llm) -> dict:
         insights = state.get("lab_insights")
         prompt_template = DELIVERY_PROMPT_TEMPLATE
         insights_type = "lab_insights"
+
+        # Build raw results table
+        lab_results = state.get("lab_result") or []
+        print(f"   lab_result count: {len(lab_results)}")
+        raw_results = _format_raw_results_table(lab_results)
+        print(f"   raw_results table: {len(raw_results)} chars")
+        print(f"   raw_results preview:\n{raw_results[:300]}")
+
     elif request_type == "image_lesion_analysis":
         insights = state.get("vision_insights")
         prompt_template = DELIVERY_PROMPT_SKIN_CARE
         insights_type = "vision_insights"
+        raw_results = None
+
     else:
         log.warning("deliver_node: unknown request_type=%s", request_type)
         insights = None
         prompt_template = DELIVERY_PROMPT_TEMPLATE
         insights_type = "unknown"
+        raw_results = None
 
     print(f"   {insights_type:15} : {len(insights or '')} chars")
 
@@ -109,6 +120,7 @@ def deliver_node(state: dict, llm) -> dict:
     if request_type == "blood_test_analysis":
         user_prompt = prompt_template.format(
             patient_id=patient_id,
+            raw_results=raw_results,
             lab_insights=insights,
         )
     elif request_type == "image_lesion_analysis":
@@ -123,11 +135,30 @@ def deliver_node(state: dict, llm) -> dict:
     print("   🤖 Calling LLM to reshape clinical output → patient message …")
     log.debug("deliver_node: invoking LLM for request_type=%s", request_type)
 
+    print(f"\n   📤 PROMPT PREVIEW (first 800 chars):")
+    print(f"   {user_prompt[:800]}...")
+
     response = llm.invoke([
         SystemMessage(content=MANAGER_SYSTEM_PROMPT),
         HumanMessage(content=user_prompt),
     ])
+
+    print(f"\n   📥 LLM RAW RESPONSE:")
+    print(f"      type: {type(response)}")
+    print(f"      content type: {type(response.content)}")
+    print(f"      content length: {len(response.content)}")
+    print(f"      content preview: {repr(response.content[:200]) if response.content else 'EMPTY'}")
+    print(f"      response_metadata: {response.response_metadata}")
+
     final_report = response.content
+
+    if not final_report:
+        log.error("deliver_node: LLM returned EMPTY content!")
+        print("   ❌ LLM returned empty content - check prompt/model configuration")
+        final_report = (
+            "Error: The system was unable to generate a patient-friendly summary. "
+            "Please contact your care team for assistance."
+        )
 
     print(f"   ✅ final_report  : {len(final_report)} chars")
     print("─" * 50)
@@ -148,3 +179,43 @@ def deliver_node(state: dict, llm) -> dict:
         "final_report": final_report,
         "messages":     [patient_msg, trace_msg],
     }
+
+
+def _format_raw_results_table(lab_results: list) -> str:
+    """Format lab results into a markdown table for the delivery prompt."""
+    if not lab_results:
+        return "No lab results available."
+
+    # Reference ranges (simplified - could be made dynamic)
+    ref_ranges = {
+        "Glucose": "70-100 mg/dL",
+        "HbA1c": "<5.7%",
+        "Hemoglobin": "12.0-15.5 g/dL (F) / 13.5-17.5 g/dL (M)",
+        "Creatinine": "0.6-1.2 mg/dL",
+    }
+
+    # Build table
+    lines = []
+    for result in lab_results:
+        test = result.get("test_name", "Unknown")
+        value = result.get("value", "?")
+        unit = result.get("unit", "")
+        flag = result.get("flag", "normal")
+
+        # Map flag to status emoji
+        status_map = {
+            "normal": "✅ Normal",
+            "low": "⬇️ Low",
+            "high": "⬆️ High",
+            "borderline_low": "⚠️ Borderline Low",
+            "borderline_high": "⚠️ Borderline High",
+            "critical_low": "🔴 Critical Low",
+            "critical_high": "🔴 Critical High",
+        }
+        status = status_map.get(flag, flag)
+
+        ref_range = ref_ranges.get(test, "See specialist")
+
+        lines.append(f"| {test} | {value} {unit} | {ref_range} | {status} |")
+
+    return "\n".join(lines)

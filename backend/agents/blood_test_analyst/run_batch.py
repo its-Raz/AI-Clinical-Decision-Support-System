@@ -61,11 +61,14 @@ def run_batch_analyst(state: dict) -> dict:
     print(f"   total batch : {len(lab_results)} metrics")
     log.info("run_batch_analyst: patient=%s, batch_size=%d", patient_id, len(lab_results))
 
-    # ── Debug: print every metric in the batch ────────────────────────
+    # ── Debug: print EVERY metric in the batch with details ───────────
+    print(f"\n   📊 FULL BATCH BREAKDOWN:")
     for i, r in enumerate(lab_results):
         flag = r.get("flag", "normal")
-        print(f"   [{i}] {r.get('test_name','?')} = {r.get('value','?')} "
-              f"{r.get('unit','')} | flag={flag}")
+        is_abnormal = flag in _ABNORMAL_FLAGS
+        marker = "🔴" if is_abnormal else "✅"
+        print(f"   [{i}] {marker} {r.get('test_name','?'):20} = {r.get('value','?'):>6} "
+              f"{r.get('unit',''):6} | flag={flag:15} | analyze={is_abnormal}")
 
     trace_msgs = []
 
@@ -155,6 +158,8 @@ def run_batch_analyst(state: dict) -> dict:
     aggregated = "\n\n---\n\n".join(summaries) if summaries else "No significant findings."
 
     print(f"\n   📋 Aggregated insights: {len(aggregated)} chars from {len(summaries)} summaries")
+    print(f"\n   📄 AGGREGATED CONTENT PREVIEW (first 500 chars):")
+    print(f"   {aggregated[:500]}...")
     log.info("run_batch_analyst: done. %d summaries aggregated", len(summaries))
 
     trace_msgs.append({

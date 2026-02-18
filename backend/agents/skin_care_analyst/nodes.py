@@ -63,13 +63,6 @@ def report_node(state: dict, llm) -> dict:
     conf      = vision_results["conf"]
     bbox      = vision_results["bbox"]
     conf_pct  = round(conf * 100, 1)
-    is_high   = label == "High Urgency"        # True for High_Urgency_mel
-
-    urgency_addendum = (
-        " IMMEDIATELY — please seek medical attention today or within 24 hours"
-        if is_high
-        else " at your earliest convenience for a routine evaluation"
-    )
 
     prompt = REPORT_PROMPT_TEMPLATE.format(
         patient_id=patient_id,
@@ -77,10 +70,9 @@ def report_node(state: dict, llm) -> dict:
         finding=finding,
         conf_pct=conf_pct,
         bbox=[round(v, 1) for v in bbox],
-        urgency_addendum=urgency_addendum,
     )
 
-    print(f"📝 Generating report | Patient: {patient_id} | {label} ({finding}) @ {conf_pct}%")
+    print(f"📝 Generating structured clinical report | {patient_id} | {label} ({finding}) @ {conf_pct}%")
     response = llm.invoke([HumanMessage(content=prompt)])
     report   = response.content
 

@@ -50,6 +50,10 @@ def trigger_p002_lab_result() -> AgentState:
     # Most recent batch = last entry in history
     latest_batch = lab_history[-1]
 
+    print(f"\n🔬 [trigger_p002_lab_result] Loading P002 data...")
+    print(f"   Latest batch date: {latest_batch.get('date', 'N/A')}")
+    print(f"   Raw batch keys: {list(latest_batch.keys())}")
+
     # Convert {TestName: {value, unit, flag}} → List[{test_name, value, unit, flag}]
     lab_results = []
     for test_name, data in latest_batch.items():
@@ -62,6 +66,10 @@ def trigger_p002_lab_result() -> AgentState:
             "flag":      data.get("flag", "normal"),
         })
 
+    print(f"   Converted to {len(lab_results)} lab_result entries")
+    for r in lab_results:
+        print(f"      • {r['test_name']:15} = {r['value']} {r['unit']:8} (flag={r['flag']})")
+
     state: AgentState = {
         "request_type":   "blood_test_analysis",
         "patient_id":     "P002",
@@ -69,6 +77,7 @@ def trigger_p002_lab_result() -> AgentState:
         "lab_insights":   None,
         "image_path":     None,
         "vision_results": None,
+        "vision_insights": None,
         "messages":       [],
         "next_step":      "",
         "final_report":   None,
