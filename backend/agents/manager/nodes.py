@@ -63,41 +63,69 @@ def manager_node(state: dict, llm) -> dict:
 
 def deliver_node(state: dict, llm) -> dict:
     """
-    Receive the analyst's `lab_insights`, generate a patient-friendly
-    `final_report`, and append it to messages.
-    Uses MANAGER_SYSTEM_PROMPT as SystemMessage so the LLM adopts the
-    clinical-liaison persona before generating the patient message.
+    Receive the analyst's insights (lab_insights OR vision_insights),
+    generate a patient-friendly final_report, and append it to messages.
+
+    This node reshapes clinical output into empathetic, accessible language
+    regardless of whether the source is blood test or skin care analysis.
     """
     log.debug("deliver_node() called")
     print("\n" + "─" * 50)
     print("💬 [deliver_node] ENTER")
 
+    from .prompts import DELIVERY_PROMPT_TEMPLATE, DELIVERY_PROMPT_SKIN_CARE
+
     patient_id   = state.get("patient_id", "unknown")
-    lab_insights = state.get("lab_insights")
+    request_type = state.get("request_type", "")
     next_step    = state.get("next_step", "")
 
     print(f"   patient_id      : {patient_id}")
+    print(f"   request_type    : {request_type}")
     print(f"   next_step       : {next_step}")
-    print(f"   lab_insights    : {len(lab_insights or '')} chars")
 
-    if not lab_insights:
-        log.warning("deliver_node: lab_insights is empty — analyst may have failed")
-        print("   ⚠️  lab_insights is empty — check analyst output")
-        lab_insights = "No analysis results were returned by the specialist agent."
+    # ── Determine which insights field to read ─────────────────────────
+    if request_type == "blood_test_analysis":
+        insights = state.get("lab_insights")
+        prompt_template = DELIVERY_PROMPT_TEMPLATE
+        insights_type = "lab_insights"
+    elif request_type == "image_lesion_analysis":
+        insights = state.get("vision_insights")
+        prompt_template = DELIVERY_PROMPT_SKIN_CARE
+        insights_type = "vision_insights"
+    else:
+        log.warning("deliver_node: unknown request_type=%s", request_type)
+        insights = None
+        prompt_template = DELIVERY_PROMPT_TEMPLATE
+        insights_type = "unknown"
+
+    print(f"   {insights_type:15} : {len(insights or '')} chars")
+
+    if not insights:
+        log.warning("deliver_node: %s is empty — analyst may have failed", insights_type)
+        print(f"   ⚠️  {insights_type} is empty — check analyst output")
+        insights = f"No analysis results were returned by the specialist agent ({insights_type})."
 
     # ── Format delivery prompt ─────────────────────────────────────────
-    user_prompt = DELIVERY_PROMPT_TEMPLATE.format(
-        patient_id=patient_id,
-        lab_insights=lab_insights,
-    )
+    if request_type == "blood_test_analysis":
+        user_prompt = prompt_template.format(
+            patient_id=patient_id,
+            lab_insights=insights,
+        )
+    elif request_type == "image_lesion_analysis":
+        user_prompt = prompt_template.format(
+            patient_id=patient_id,
+            vision_insights=insights,
+        )
+    else:
+        user_prompt = f"Patient {patient_id}: {insights}"
 
     # ── LLM call WITH system prompt ────────────────────────────────────
-    print("   🤖 Calling LLM with SystemMessage + HumanMessage …")
-    log.debug("deliver_node: invoking LLM")
+    print("   🤖 Calling LLM to reshape clinical output → patient message …")
+    log.debug("deliver_node: invoking LLM for request_type=%s", request_type)
 
     response = llm.invoke([
-        SystemMessage(content=MANAGER_SYSTEM_PROMPT),   # ← role/persona
-        HumanMessage(content=user_prompt),              # ← task
+        SystemMessage(content=MANAGER_SYSTEM_PROMPT),
+        HumanMessage(content=user_prompt),
     ])
     final_report = response.content
 
@@ -111,8 +139,8 @@ def deliver_node(state: dict, llm) -> dict:
     trace_msg = {
         "role":    "system",
         "content": (
-            f"[Manager → deliver_node] Final report generated for {patient_id}. "
-            f"({len(final_report)} chars)"
+            f"[Manager → deliver_node] Final patient message generated for {patient_id} "
+            f"({request_type}). Length: {len(final_report)} chars."
         ),
     }
 

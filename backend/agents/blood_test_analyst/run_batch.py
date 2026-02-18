@@ -31,8 +31,9 @@ def _ensure_react_agent_on_path():
 
 _ensure_react_agent_on_path()
 
-# Now safe to import — bare `from state import ...` inside run.py will resolve
-from backend.agents.blood_test_analyst.react_agent.run import run_react_agent  # noqa: E402
+# DO NOT import run_react_agent at module level — it loads the RAG system
+# which initializes heavy ML models (embeddings, TensorFlow).
+# Import lazily inside the function instead.
 
 # Flags that warrant deep analysis
 _ABNORMAL_FLAGS = {"low", "high", "critical_low", "critical_high"}
@@ -49,6 +50,9 @@ def run_batch_analyst(state: dict) -> dict:
     log.debug("run_batch_analyst() called")
     print("\n" + "─" * 50)
     print("🔬 [run_batch_analyst] ENTER")
+
+    # ── Lazy import — only load RAG system when actually needed ───────
+    from backend.agents.blood_test_analyst.react_agent.run import run_react_agent
 
     patient_id  = state.get("patient_id", "unknown")
     lab_results = state.get("lab_result") or []
