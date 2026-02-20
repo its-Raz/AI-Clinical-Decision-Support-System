@@ -9,7 +9,7 @@ Two nodes:
 
 import logging
 from langchain_core.messages import HumanMessage, SystemMessage
-from .prompts import MANAGER_SYSTEM_PROMPT, DELIVERY_PROMPT_TEMPLATE
+from prompts import MANAGER_SYSTEM_PROMPT, DELIVERY_PROMPT_TEMPLATE
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ def manager_node(state: dict, llm) -> dict:
     route_map = {
         "blood_test_analysis":   "blood_test_analyst",
         "image_lesion_analysis": "skin_care_analyst",
+        "evidence_analyst": "evidence_analyst",
     }
     next_step = route_map.get(request_type, "unknown")
 
@@ -102,6 +103,13 @@ def deliver_node(state: dict, llm) -> dict:
         insights_type = "vision_insights"
         raw_results = None
 
+
+    elif request_type == "evidence_analyst":
+        insights = state.get("evidence_insights")
+        from .prompts import DELIVERY_PROMPT_EVIDENCE  # ייבוא הפרומפט החדש
+        prompt_template = DELIVERY_PROMPT_EVIDENCE
+        insights_type = "evidence_insights"
+        raw_results = None
     else:
         log.warning("deliver_node: unknown request_type=%s", request_type)
         insights = None
@@ -127,6 +135,11 @@ def deliver_node(state: dict, llm) -> dict:
         user_prompt = prompt_template.format(
             patient_id=patient_id,
             vision_insights=insights,
+        )
+    elif request_type == "evidence_analyst":
+        user_prompt = prompt_template.format(
+            patient_id=patient_id,
+            evidence_insights=insights,
         )
     else:
         user_prompt = f"Patient {patient_id}: {insights}"

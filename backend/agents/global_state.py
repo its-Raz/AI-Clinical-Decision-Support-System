@@ -15,6 +15,8 @@ class AgentState(TypedDict):
     image_path:     Optional[str]
     vision_results: Optional[dict]               # {bbox, label, conf} - raw YOLO output
     vision_insights: Optional[str]               # skin care analyst clinical summary
+    evidence_insights: Optional[str]
     messages:       Annotated[List[dict], operator.add]   # all trace + patient messages
     next_step:      str
     final_report:   Optional[str]                # patient-facing delivery message (reshaped by manager)
+

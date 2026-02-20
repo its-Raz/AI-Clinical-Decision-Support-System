@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 
-from .nodes import manager_node, deliver_node
-from .edges import route_after_manager
+from backend.agents.manager.nodes import manager_node, deliver_node
+from backend.agents.manager.edges import route_after_manager
 
 load_dotenv()
 
@@ -82,11 +82,16 @@ class ManagerAgent:
             from backend.agents.skin_care_analyst.run import run_skin_care_analyst
             return run_skin_care_analyst(state)
 
+        def lazy_evidence_analyst(state):
+            from backend.agents.evidence_analyst.run import run_react_agent
+            return run_react_agent(state)
+
         workflow = StateGraph(AgentState)
 
         workflow.add_node("manager",            lambda s: manager_node(s, self.llm))
         workflow.add_node("blood_test_analyst",  lazy_blood_test_analyst)
         workflow.add_node("skin_care_analyst",   lazy_skin_care_analyst)
+        workflow.add_node("evidence_analyst", lazy_evidence_analyst)
         workflow.add_node("deliver",            lambda s: deliver_node(s, self.llm))
 
         workflow.set_entry_point("manager")
@@ -97,14 +102,16 @@ class ManagerAgent:
             {
                 "blood_test_analyst": "blood_test_analyst",
                 "skin_care_analyst":  "skin_care_analyst",
+                "evidence_analyst": "evidence_analyst",
                 "deliver":            "deliver",
             },
         )
         workflow.add_edge("blood_test_analyst", "deliver")
         workflow.add_edge("skin_care_analyst",  "deliver")
+        workflow.add_edge("evidence_analyst", "deliver")
         workflow.add_edge("deliver", END)
 
-        log.info("_build_graph: nodes=%s", ["manager", "blood_test_analyst", "skin_care_analyst", "deliver"])
+        log.info("_build_graph: nodes=%s", ["manager", "blood_test_analyst", "skin_care_analyst","evidence_analyst", "deliver"])
         return workflow.compile()
 
     def run(self, initial_state: dict) -> dict:
