@@ -9,56 +9,102 @@ Two nodes:
 
 import logging
 from langchain_core.messages import HumanMessage, SystemMessage
-from prompts import MANAGER_SYSTEM_PROMPT, DELIVERY_PROMPT_TEMPLATE
+from backend.agents.manager.prompts import MANAGER_SYSTEM_PROMPT, DELIVERY_PROMPT_TEMPLATE
 
 log = logging.getLogger(__name__)
 
 
 def manager_node(state: dict, llm) -> dict:
     """
-    Inspect the incoming state and decide where to route.
-    Sets `next_step` and appends a system trace message.
-    Routing is deterministic — no LLM call needed here.
-    The system prompt is applied in deliver_node where LLM is used.
+    Acts as the Judge for the semantic router's proposed classification.
+    Forces a structured decision via tool calling — no string parsing needed.
+
+    Reads:  raw_user_input, router_proposed_category, router_score, router_confidence
+    Writes: request_type (final accepted category), next_step, messages
     """
-    log.debug("manager_node() called")
+    from .prompts import JUDGE_PROMPT, MANAGER_SYSTEM_PROMPT
+    from .tools import judge_decision
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    log.debug("manager_node() / Judge called")
     print("\n" + "─" * 50)
-    print("🧭 [manager_node] ENTER")
+    print("⚖️  [manager_node / Judge] ENTER")
 
-    request_type = state.get("request_type", "")
-    patient_id   = state.get("patient_id", "unknown")
-    lab_result   = state.get("lab_result") or []
+    patient_id        = state.get("patient_id", "unknown")
+    user_input        = state.get("raw_user_input", "")
+    proposed_category = state.get("router_proposed_category", "unsupported")
+    router_score      = state.get("router_score", 0.0)
+    confidence        = state.get("router_confidence", "medium")
 
-    print(f"   patient_id   : {patient_id}")
-    print(f"   request_type : {request_type}")
-    print(f"   lab_result   : {len(lab_result)} metrics in batch")
+    print(f"   patient_id        : {patient_id}")
+    print(f"   proposed_category : {proposed_category}")
+    print(f"   router_score      : {router_score:.4f}")
+    print(f"   confidence        : {confidence}")
 
+    # ── Build Judge prompt ────────────────────────────────────────────
+    prompt = JUDGE_PROMPT.format(
+        user_input=user_input,
+        proposed_category=proposed_category,
+        router_score=router_score,
+        confidence=confidence,
+    )
+
+    # ── Force tool call — LLM cannot respond in plain text ───────────
+    llm_judge = llm.bind_tools([judge_decision])
+
+    print("   🤖 Calling Judge LLM …")
+    response = llm_judge.invoke([
+        SystemMessage(content=MANAGER_SYSTEM_PROMPT),
+        HumanMessage(content=prompt),
+    ])
+
+    # ── Extract structured args from tool call ────────────────────────
+    tool_calls = response.tool_calls
+
+    if tool_calls:
+        args              = tool_calls[0]["args"]
+        accepted_category = args["accepted_category"]
+        reasoning         = args["reasoning"]
+        overridden        = args.get("overridden", False)
+    else:
+        # Should never happen with tool_choice enforced — fail safely
+        log.error("Judge LLM did not call judge_decision — falling back to router proposal")
+        accepted_category = proposed_category
+        reasoning         = "Tool call missing — router proposal used as fallback."
+        overridden        = False
+
+    print(f"   ✅ accepted_category : {accepted_category}")
+    print(f"   📝 reasoning         : {reasoning}")
+    print(f"   🔀 overridden        : {overridden}")
+
+    # ── Map accepted category → next graph node ───────────────────────
     route_map = {
         "blood_test_analysis":   "blood_test_analyst",
         "image_lesion_analysis": "skin_care_analyst",
-        "evidence_analyst": "evidence_analyst",
+        "evidence_analyst":      "evidence_analyst",
+        "unsupported":           "deliver",
     }
-    next_step = route_map.get(request_type, "unknown")
+    next_step = route_map.get(accepted_category, "deliver")
 
-    if next_step == "unknown":
-        print(f"   ⚠️  Unrecognised request_type '{request_type}' — fallback to deliver")
-        log.warning("Unrecognised request_type: %s", request_type)
-
-    print(f"   ✅ next_step  : {next_step}")
+    print(f"   ↳ next_step : {next_step}")
     print("─" * 50)
 
+    # ── Trace message for audit log ───────────────────────────────────
     trace_msg = {
-        "role":    "system",
+        "role": "system",
         "content": (
-            f"[Manager] Patient {patient_id} | request_type='{request_type}' | "
-            f"Routing → {next_step}. "
-            f"Batch size: {len(lab_result)} metrics."
+            f"[Judge] Patient {patient_id} | "
+            f"Router proposed: '{proposed_category}' ({router_score:.4f}, {confidence}) | "
+            f"Judge accepted: '{accepted_category}' | "
+            f"Overridden: {overridden} | "
+            f"Reason: {reasoning}"
         ),
     }
 
     return {
-        "next_step": next_step,
-        "messages":  [trace_msg],
+        "request_type": accepted_category,
+        "next_step":    next_step,
+        "messages":     [trace_msg],
     }
 
 

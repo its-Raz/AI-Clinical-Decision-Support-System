@@ -138,16 +138,28 @@ def simulate_new_lab_result() -> AgentState:
 
     # ── Step 5: Build AgentState ─────────────────────────────────────────
     state: AgentState = {
-        "request_type":   "blood_test_analysis",
-        "patient_id":     patient_id,
-        "lab_result":     lab_results,
-        "lab_insights":   None,
-        "image_path":     None,
+        # Router metadata — hardcoded since this is an internal trigger
+        "raw_user_input": "Simulated new lab result arrival",
+        "router_proposed_category": "blood_test_analysis",
+        "router_score": 1.0,
+        "router_confidence": "high",
+
+        # Classification — set directly, bypasses Judge
+        "request_type": "blood_test_analysis",
+        "patient_id": patient_id,
+
+        # Specialist fields
+        "lab_result": lab_results,
+        "lab_insights": None,
+        "image_path": None,
         "vision_results": None,
         "vision_insights": None,
-        "messages":       [],
-        "next_step":      "",
-        "final_report":   None,
+        "evidence_insights": None,
+
+        # Graph internals
+        "messages": [],
+        "next_step": "",
+        "final_report": None,
     }
 
     return state
@@ -220,16 +232,28 @@ def analyze_existing_test(patient_id: str, test_index: int) -> AgentState:
     print("=" * 70 + "\n")
 
     state: AgentState = {
-        "request_type":   "blood_test_analysis",
-        "patient_id":     patient_id,
-        "lab_result":     lab_results,
-        "lab_insights":   None,
-        "image_path":     None,
+        # Router metadata — hardcoded since this is an internal trigger
+        "raw_user_input": f"Analyze existing lab test #{test_index + 1} for {patient_id}",
+        "router_proposed_category": "blood_test_analysis",
+        "router_score": 1.0,
+        "router_confidence": "high",
+
+        # Classification — set directly, bypasses Judge
+        "request_type": "blood_test_analysis",
+        "patient_id": patient_id,
+
+        # Specialist fields
+        "lab_result": lab_results,
+        "lab_insights": None,
+        "image_path": None,
         "vision_results": None,
         "vision_insights": None,
-        "messages":       [],
-        "next_step":      "",
-        "final_report":   None,
+        "evidence_insights": None,
+
+        # Graph internals
+        "messages": [],
+        "next_step": "",
+        "final_report": None,
     }
 
     return state

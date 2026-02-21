@@ -1,0 +1,44 @@
+embedding:
+  EMBEDDING_MODEL: "RPRTHPB-text-embedding-3-small"
+  BASE_URL: "https://api.llmod.ai/v1"
+
+routing:
+  lower_threshold: 0.30   # below this → spam/garbage, drop immediately
+  upper_threshold: 0.45   # above this → high confidence, pass to Judge
+
+routes:
+  blood_test_analysis:
+    description: "Patient asking about lab results, blood tests, or medical metrics"
+    examples:
+      - "My glucose came back at 112, is that bad?"
+      - "Can you explain my blood test results?"
+      - "My hemoglobin is low, what does that mean?"
+      - "I got my lab results back and my creatinine is elevated"
+      - "What does it mean if my HbA1c is 6.2?"
+      - "My CBC showed low white blood cells"
+      - "The doctor said my cholesterol is high, can you explain?"
+      - "I have my blood panel results and want to understand them"
+
+  image_lesion_analysis:
+    description: "Patient asking about a skin image, mole, lesion, or dermatology concern"
+    examples:
+      - "I have a mole that changed color recently"
+      - "Can you analyze this skin lesion?"
+      - "There's a suspicious spot on my arm I want checked"
+      - "My dermatologist wants me to monitor this mole"
+      - "I uploaded a photo of a skin growth, can you review it?"
+      - "This bump on my skin has been growing"
+      - "Is this rash something I should worry about?"
+      - "I have a dark patch on my back that appeared recently"
+
+  evidence_analyst:
+    description: "Patient asking a general medical question, about symptoms, conditions, or treatments"
+    examples:
+      - "What are the symptoms of type 2 diabetes?"
+      - "Can high blood pressure cause headaches?"
+      - "What is the treatment for iron deficiency anemia?"
+      - "I've been feeling very tired lately, what could cause that?"
+      - "Is it safe to take ibuprofen with blood pressure medication?"
+      - "What does the pancreas do?"
+      - "How does insulin resistance develop?"
+      - "What are the early signs of kidney disease?"

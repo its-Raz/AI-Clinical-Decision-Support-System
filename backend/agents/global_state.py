@@ -8,15 +8,26 @@ from typing import Annotated, List, Optional, TypedDict
 
 
 class AgentState(TypedDict):
-    request_type:   str                          # "blood_test_analysis" | "image_lesion_analysis"
+    # ── Classification ─────────────────────────────────────────────────
+    request_type:   str                  # final accepted category (written by Judge)
     patient_id:     str
-    lab_result:     Optional[List[dict]]         # [{test_name, value, unit, flag}, ...]
-    lab_insights:   Optional[str]                # blood test analyst summary
-    image_path:     Optional[str]
-    vision_results: Optional[dict]               # {bbox, label, conf} - raw YOLO output
-    vision_insights: Optional[str]               # skin care analyst clinical summary
+
+    # ── Semantic router metadata ────────────────────────────────────────
+    raw_user_input:              Optional[str]    # original free-text from user
+    router_proposed_category:    Optional[str]    # what the router suggested
+    router_score:                Optional[float]  # cosine similarity score
+    router_confidence:           Optional[str]    # "high" | "medium" | "spam"
+
+    # ── Specialist payloads ─────────────────────────────────────────────
+    lab_result:      Optional[List[dict]]   # [{test_name, value, unit, flag}, ...]
+    lab_insights:    Optional[str]          # blood test analyst summary
+    image_path:      Optional[str]
+    vision_results:  Optional[dict]         # {bbox, label, conf} - raw YOLO output
+    vision_insights: Optional[str]          # skin care analyst clinical summary
     evidence_insights: Optional[str]
-    messages:       Annotated[List[dict], operator.add]   # all trace + patient messages
-    next_step:      str
-    final_report:   Optional[str]                # patient-facing delivery message (reshaped by manager)
+
+    # ── Graph internals ─────────────────────────────────────────────────
+    messages:        Annotated[List[dict], operator.add]
+    next_step:       str
+    final_report:    Optional[str]          # patient-facing delivery message (reshaped by manager)
 

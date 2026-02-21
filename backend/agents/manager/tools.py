@@ -1,30 +1,39 @@
 """
 backend/agents/manager/tools.py
 
-Tools available to the Manager agent for routing and classification.
+Tools available to the Manager agent.
 """
 
 from langchain_core.tools import tool
 from typing import Literal
 
+
 @tool
-def classify_patient_request(
-    category: Literal["blood_test_analysis", "image_lesion_analysis", "evidence_analyst", "unsupported"],
-    reasoning: str
+def judge_decision(
+    accepted_category: Literal[
+        "blood_test_analysis",
+        "image_lesion_analysis",
+        "evidence_analyst",
+        "unsupported"
+    ],
+    reasoning: str,
+    overridden: bool,
 ) -> dict:
     """
-    Classify the incoming patient request into one of the supported medical categories.
+    Record the Judge's final routing decision.
 
-    Categories:
-    - blood_test_analysis: The user is asking about lab results or blood tests.
-    - image_lesion_analysis: The user uploaded or is asking about a skin image/lesion/mole.
-    - evidence_analyst: The user is asking a general medical question, about symptoms, or treatments.
-    - unsupported: The request is NOT medical, or it is a medical request we cannot safely handle.
+    Call this tool to accept or override the semantic router's proposed category.
 
     Args:
-        category: The exact category string.
-        reasoning: A short explanation of why this category was chosen.
+        accepted_category: The final category you are committing to.
+        reasoning: One sentence explaining why you accepted or overrode the proposal.
+        overridden: True if you are changing the router's proposal, False if accepting it.
     """
-    return {"category": category, "reasoning": reasoning}
+    return {
+        "accepted_category": accepted_category,
+        "reasoning":         reasoning,
+        "overridden":        overridden,
+    }
 
-__all__ = ["classify_patient_request"]
+
+__all__ = ["judge_decision"]
