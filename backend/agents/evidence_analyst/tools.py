@@ -19,7 +19,12 @@ def search_medical_knowledge(query: str):
         """
     rag = create_medline_test_rag()
     results = rag.answer_question(query)
-    return f"Medical knowledge about '{query}': {results}"
+    return {
+
+        "rag_sys_prompt": results.get("llm_system_prompt", ""),
+        "rag_user_prompt": results.get("llm_user_prompt", ""),
+        "answer": f"Medical knowledge about '{query}': {results['answer']}"
+    }
 
 
 

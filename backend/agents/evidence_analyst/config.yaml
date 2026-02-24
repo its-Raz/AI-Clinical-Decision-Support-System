@@ -10,4 +10,4 @@ llm:
 
 # ReAct Settings
 react:
-  max_iterations: 5
+  max_iterations: 2

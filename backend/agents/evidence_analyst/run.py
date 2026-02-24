@@ -54,47 +54,85 @@ def _get_query(global_state: dict) -> str:
 def _extract_react_steps(final_state: dict, query: str) -> list[dict]:
     """
     Convert the ReAct agent's internal messages + tool_calls_history
-    into structured step objects for the API trace.
-
-    Produces:
-      - One "EvidenceAnalyst/ReAct" step per AIMessage that has text content
-        (empty AIMessages are pure tool-call triggers — skipped)
-      - One "EvidenceAnalyst/Tool:<name>" step per entry in tool_calls_history
+    into structured step objects for the API trace in chronological order.
     """
     steps = []
-    messages           = final_state.get("messages", [])
+    messages = final_state.get("messages", [])
     tool_calls_history = final_state.get("tool_calls_history", [])
 
-    # ── ReAct LLM steps ───────────────────────────────────────────────
-    last_human_content = query
+    # 1. יוצרים איטרטור שיאפשר לנו למשוך כלים אחד-אחד לפי הסדר
+    history_iter = iter(tool_calls_history)
+
+    from backend.agents.evidence_analyst.prompts import REACT_SYSTEM_PROMPT
+
+    # הפרומפט הראשוני
+    current_prompt = f"[SYSTEM]\n{REACT_SYSTEM_PROMPT}\n\n[USER]\n{query}"
 
     for msg in messages:
         msg_type = type(msg).__name__
 
-        if msg_type in ("HumanMessage", "ToolMessage"):
-            last_human_content = (
-                msg.content if isinstance(msg.content, str) else str(msg.content)
-            )
+        # אם זו תצפית מכלי, אנחנו רק מעדכנים את הפרומפט לאיטרציה הבאה של המודל
+        if msg_type == "ToolMessage":
+            content = msg.content if isinstance(msg.content, str) else str(msg.content)
+            current_prompt = f"[TOOL OBSERVATION]\n{content}"
 
+        # אם זו הודעת מודל, אנחנו שומרים אותה
         elif msg_type == "AIMessage":
             content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            if content.strip():
+            response_text = content.strip()
+
+            # בודקים אם המודל ביקש להפעיל כלים
+            has_tools = hasattr(msg, "tool_calls") and msg.tool_calls
+
+            if has_tools:
+                tool_desc = ", ".join([f"{tc['name']}({tc['args']})" for tc in msg.tool_calls])
+                response_text += f"\n[Tool Call Triggered: {tool_desc}]"
+
+            # למקרה שהמודל החזיר רק Tool Call בלי טקסט חופשי
+            if not response_text and has_tools:
+                response_text = "[Tool Call Only]"
+
+            if response_text:
                 steps.append({
-                    "module":   "EvidenceAnalyst/ReAct",
-                    "prompt":   last_human_content,
-                    "response": content,
+                    "module": "EvidenceAnalyst/ReAct",
+                    "prompt": current_prompt,
+                    "response": response_text.strip(),
                 })
 
-    # ── Tool call steps ───────────────────────────────────────────────
-    for tc in tool_calls_history:
-        steps.append({
-            "module":   f"EvidenceAnalyst/Tool:{tc.get('tool', 'unknown')}",
-            "prompt":   f"tool: {tc.get('tool')}\nargs: {tc.get('args', {})}",
-            "response": str(tc.get("result", "")),
-        })
+            # --- התיקון הקריטי ---
+            # מיד אחרי שהמודל ביקש כלי, אנחנו שולפים את ביצוע הכלי מההיסטוריה ומכניסים ל-Steps!
+            if has_tools:
+                for _ in msg.tool_calls:
+                    try:
+                        tc = next(history_iter)
+                        res = tc.get("result", "")
+
+                        # אם ה-RAG החזיר את המילון המורחב עם הפרומפטים
+                        if isinstance(res, dict) and "rag_sys_prompt" in res:
+                            # שלב א': איך ה-LLM הפנימי של ה-RAG עבד
+                            steps.append({
+                                "module": "EvidenceAnalyst/RAG_LLM",
+                                "prompt": f"[SYSTEM]\n{res['rag_sys_prompt']}\n\n[USER]\n{res['rag_user_prompt']}",
+                                "response": res.get("answer", "")
+                            })
+
+                            # שלב ב': הכלי עצמו כפי שהוא מוחזר לסוכן
+                            steps.append({
+                                "module": f"EvidenceAnalyst/Tool:{tc.get('tool', 'unknown')}",
+                                "prompt": f"[TOOL ARGUMENTS]\n{tc.get('args', {})}",
+                                "response": res.get("answer", "")
+                            })
+                        else:
+                            # Fallback לכלים פשוטים
+                            steps.append({
+                                "module": f"EvidenceAnalyst/Tool:{tc.get('tool', 'unknown')}",
+                                "prompt": f"[TOOL ARGUMENTS]\n{tc.get('args', {})}",
+                                "response": str(res),
+                            })
+                    except StopIteration:
+                        pass  # במקרה קיצון שאין התאמה בין הבקשות להיסטוריה
 
     return steps
-
 
 def run_react_agent(global_state: dict) -> dict:
     """
@@ -147,7 +185,30 @@ def run_react_agent(global_state: dict) -> dict:
     # ── Extract results ───────────────────────────────────────────────
     final_answer       = final_state["messages"][-1].content
     tool_calls_history = final_state.get("tool_calls_history", [])
+    # ── FIX: Force a final response if agent stopped on a tool call ───
+    if not final_answer.strip():
+        print("\n⚠️ Agent hit max iterations mid-thought (empty content). Forcing final text response...")
 
+        # Filter out the last message if it's an unresolved tool call
+        # to prevent OpenAI's "tool_calls must be followed by tool messages" 400 error.
+        safe_messages = list(final_state["messages"])
+        last_msg = safe_messages[-1]
+        if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+            safe_messages = safe_messages[:-1]  # Remove the hanging tool call
+
+        # We use agent.llm (NOT agent.model) because agent.llm has NO tools bound.
+        fallback_msg = agent.llm.invoke(
+            safe_messages + [
+                SystemMessage(content=(
+                    "SYSTEM: You have reached the maximum allowed search queries. "
+                    "You must now provide a final text answer to the user based ONLY on the "
+                    "information you have gathered so far. Do not attempt to use any tools. "
+                    "If you lack information, honestly state that."
+                ))
+            ]
+        )
+        final_answer = fallback_msg.content
+        final_state["messages"].append(fallback_msg)
     print(f"\n📊 ReAct complete:")
     print(f"   Tool calls : {len(tool_calls_history)}")
     print(f"   Iterations : {final_state.get('iterations', '?')}")

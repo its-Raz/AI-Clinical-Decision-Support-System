@@ -43,47 +43,52 @@ def _extract_react_steps(result_state: dict, query: str) -> list[dict]:
         })
 
     return steps
-def call_tool(agent: 'ReActAgent', state: ReActInternalState) -> dict:
-    """
-    Tool node: Execute tools requested by the model.
+from langchain_core.messages import ToolMessage
 
-    Args:
-        agent: ReActAgent instance
-        state: Current agent state
-
-    Returns:
-        Dict with tool results as messages and updated tool_calls_history
+def call_tool(agent: 'ReActAgent', state: dict) -> dict:
     """
+    Tool node: Execute requested tools.
+    """
+    print("\n--- Calling Tools ---")
+    messages = state["messages"]
+    last_message = messages[-1]
+
     outputs = []
     tool_history = []
 
-    # Iterate over tool calls in the last message
-    for tool_call in state["messages"][-1].tool_calls:
-        print(f"🔧 Calling: {tool_call['name']}")
+    for tool_call in last_message.tool_calls:
+        print(f"🛠️  Executing tool: {tool_call['name']}")
+        print(f"   Args: {tool_call['args']}")
 
-        # Get the tool and invoke it
-        tool_result = agent.tools_by_name[tool_call["name"]].invoke(tool_call["args"])
+        tool = agent.tools_by_name[tool_call["name"]]
+        tool_result = tool.invoke(tool_call["args"])
 
         print(f"   ✅ Result: {str(tool_result)[:80]}...")
 
+        # --- FIX: Handle the dictionary returned by the RAG tool ---
+        if isinstance(tool_result, dict) and "answer" in tool_result:
+            content_for_agent = tool_result["answer"] # Only give the string answer to ReAct
+            history_result = tool_result              # Keep the full dict for the API Trace
+        else:
+            content_for_agent = str(tool_result)
+            history_result = str(tool_result)
 
-        # Create ToolMessage with formatted result
+        # Create ToolMessage with the clean string for the LLM
         outputs.append(
             ToolMessage(
-                content=tool_result,  # ← Use formatted version
+                content=content_for_agent,
                 name=tool_call["name"],
                 tool_call_id=tool_call["id"],
             )
         )
 
-        # Record in history (keep raw result)
+        # Record in history (full dict)
         tool_history.append({
             "tool": tool_call["name"],
             "args": tool_call["args"],
-            "result": str(tool_result)  # Keep original for debugging
+            "result": history_result
         })
 
-    # Combine with existing history
     updated_history = state.get("tool_calls_history", []) + tool_history
 
     return {

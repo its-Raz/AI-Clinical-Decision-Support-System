@@ -545,7 +545,9 @@ class MedlineTestRAG:
         # Build response
         result = {
             "answer": answer,
-            "query": question
+            "query": question,
+            "llm_system_prompt": self.system_prompt,
+            "llm_user_prompt": user_message
         }
 
         if return_sources:
