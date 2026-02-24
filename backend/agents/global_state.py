@@ -31,3 +31,4 @@ class AgentState(TypedDict):
     next_step:       str
     final_report:    Optional[str]          # patient-facing delivery message (reshaped by manager)
 
+    steps: Annotated[List[dict], operator.add]

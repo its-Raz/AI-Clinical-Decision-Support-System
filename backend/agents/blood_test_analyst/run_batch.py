@@ -38,7 +38,50 @@ _ensure_react_agent_on_path()
 # Flags that warrant deep analysis
 _ABNORMAL_FLAGS = {"low", "high", "critical_low", "critical_high"}
 
+def _extract_react_steps(result_state: dict, test_name: str) -> list[dict]:
+    """
+    Convert the ReAct agent's internal messages + tool_calls_history
+    into structured step objects.
 
+    Produces:
+      - One "BloodTestAnalyst/ReAct" step per AIMessage that has text content
+      - One "BloodTestAnalyst/Tool:<name>" step per entry in tool_calls_history
+    """
+    steps = []
+    messages           = result_state.get("messages", [])
+    tool_calls_history = result_state.get("tool_calls_history", [])
+
+    # ── ReAct LLM steps ───────────────────────────────────────────────
+    # Track the last human/tool message so we can use it as the "prompt"
+    # for the next AIMessage (mirrors what the model actually saw).
+    last_human_content = f"Analyze {test_name} lab result"
+
+    for msg in messages:
+        msg_type = type(msg).__name__   # "HumanMessage" | "AIMessage" | "ToolMessage"
+
+        if msg_type in ("HumanMessage", "ToolMessage"):
+            last_human_content = (
+                msg.content if isinstance(msg.content, str) else str(msg.content)
+            )
+
+        elif msg_type == "AIMessage":
+            content = msg.content if isinstance(msg.content, str) else str(msg.content)
+            if content.strip():   # skip empty AIMessages (pure tool-call triggers)
+                steps.append({
+                    "module":   "BloodTestAnalyst/ReAct",
+                    "prompt":   last_human_content,
+                    "response": content,
+                })
+
+    # ── Tool call steps ───────────────────────────────────────────────
+    for tc in tool_calls_history:
+        steps.append({
+            "module":   f"BloodTestAnalyst/Tool:{tc.get('tool', 'unknown')}",
+            "prompt":   f"tool: {tc.get('tool')}\nargs: {tc.get('args', {})}",
+            "response": str(tc.get("result", "")),
+        })
+
+    return steps
 def run_batch_analyst(state: dict) -> dict:
     """
     LangGraph node — wraps run_react_agent for a batch of lab results.
@@ -102,11 +145,17 @@ def run_batch_analyst(state: dict) -> dict:
             "content": "[Blood Test Analyst] All values normal — no RAG required.",
         })
         print("─" * 50)
-        return {"lab_insights": msg, "messages": trace_msgs}
+        all_steps = [{
+            "module": "BloodTestAnalyst",
+            "prompt": f"Patient: {patient_id}\nLab results: {lab_results}",
+            "response": msg,
+        }]
+
+        return {"lab_insights": msg, "messages": trace_msgs, "steps": all_steps}
 
     # ── Run ReAct agent for each abnormal result ──────────────────────
     summaries = []
-
+    all_steps = []
     for idx, result in enumerate(to_analyse):
         test_name = result["test_name"]
         print(f"\n   🧪 [{idx+1}/{abnormal_count}] Analysing: {test_name} "
@@ -134,6 +183,7 @@ def run_batch_analyst(state: dict) -> dict:
                 print(f"   ✅ Summary ready: {len(summary)} chars")
                 log.info("run_batch_analyst: %s summary=%d chars", test_name, len(summary))
                 summaries.append(f"**{test_name}**\n{summary}")
+                all_steps.extend(_extract_react_steps(result_state, test_name))
                 trace_msgs.append({
                     "role":    "system",
                     "content": f"[Blood Test Analyst → ReAct] {test_name} summary ready ({len(summary)} chars).",
@@ -146,12 +196,18 @@ def run_batch_analyst(state: dict) -> dict:
                     "content": f"[Blood Test Analyst] ⚠️ Empty summary for {test_name}.",
                 })
 
+
         except Exception as e:
             log.error("run_batch_analyst: error analysing %s: %s", test_name, e, exc_info=True)
             print(f"   ❌ ERROR analysing {test_name}: {e}")
             trace_msgs.append({
                 "role":    "system",
                 "content": f"[Blood Test Analyst] ❌ Error analysing {test_name}: {e}",
+            })
+            all_steps.append({
+                "module": "BloodTestAnalyst/ReAct",
+                "prompt": f"Analyze {test_name}: {result}",
+                "response": f"ERROR: {e}",
             })
 
     # ── Aggregate ─────────────────────────────────────────────────────
@@ -173,5 +229,6 @@ def run_batch_analyst(state: dict) -> dict:
     print("─" * 50)
     return {
         "lab_insights": aggregated,
-        "messages":     trace_msgs,
+        "messages": trace_msgs,
+        "steps": all_steps,
     }

@@ -1,5 +1,5 @@
 """
-Node functions for ReAct agent.
+Node functions for Bloood test analyst ReAct agent.
 """
 
 from langchain_core.messages import ToolMessage

@@ -48,7 +48,7 @@ def manager_node(state: dict, llm) -> dict:
         router_score=router_score,
         confidence=confidence,
     )
-
+    full_prompt_text = f"[SYSTEM]\n{MANAGER_SYSTEM_PROMPT}\n\n[USER]\n{prompt}"
     # ── Force tool call — LLM cannot respond in plain text ───────────
     llm_judge = llm.bind_tools([judge_decision])
 
@@ -101,10 +101,33 @@ def manager_node(state: dict, llm) -> dict:
         ),
     }
 
+    # ── Step 1: the LLM call ──────────────────────────────────────────
+    judge_step = {
+        "module": "ManagerAgent/Judge",
+        "prompt": full_prompt_text,
+        "response": response.content or f"[tool call triggered] {args}",
+    }
+
+    # ── Step 2: the tool call result ──────────────────────────────────
+    tool_step = {
+        "module": "judge_decision (tool)",
+        "prompt": (
+            f"accepted_category: {accepted_category}\n"
+            f"reasoning: {reasoning}\n"
+            f"overridden: {overridden}"
+        ),
+        "response": (
+            f"Routing to: {next_step} | "
+            f"Accepted: {accepted_category} | "
+            f"Overridden: {overridden}"
+        ),
+    }
+
     return {
         "request_type": accepted_category,
-        "next_step":    next_step,
-        "messages":     [trace_msg],
+        "next_step": next_step,
+        "messages": [trace_msg],
+        "steps": [judge_step, tool_step],
     }
 
 
@@ -189,6 +212,7 @@ def deliver_node(state: dict, llm) -> dict:
         )
     else:
         user_prompt = f"Patient {patient_id}: {insights}"
+    full_prompt_text = f"[SYSTEM]\n{MANAGER_SYSTEM_PROMPT}\n\n[USER]\n{user_prompt}"
 
     # ── LLM call WITH system prompt ────────────────────────────────────
     print("   🤖 Calling LLM to reshape clinical output → patient message …")
@@ -234,9 +258,16 @@ def deliver_node(state: dict, llm) -> dict:
         ),
     }
 
+    deliver_step = {
+        "module": "DeliverNode",
+        "prompt": full_prompt_text,
+        "response": final_report,
+    }
+
     return {
         "final_report": final_report,
-        "messages":     [patient_msg, trace_msg],
+        "messages": [patient_msg, trace_msg],
+        "steps": [deliver_step],
     }
 
 

@@ -13,7 +13,36 @@ import json
 from backend.agents.evidence_analyst.utils import _print_messages,_print_response
 
 
+def _extract_react_steps(result_state: dict, query: str) -> list[dict]:
+    steps = []
+    messages           = result_state.get("messages", [])
+    tool_calls_history = result_state.get("tool_calls_history", [])
 
+    last_human_content = query
+
+    for msg in messages:
+        msg_type = type(msg).__name__
+        if msg_type in ("HumanMessage", "ToolMessage"):
+            last_human_content = (
+                msg.content if isinstance(msg.content, str) else str(msg.content)
+            )
+        elif msg_type == "AIMessage":
+            content = msg.content if isinstance(msg.content, str) else str(msg.content)
+            if content.strip():
+                steps.append({
+                    "module":   "EvidenceAnalyst/ReAct",
+                    "prompt":   last_human_content,
+                    "response": content,
+                })
+
+    for tc in tool_calls_history:
+        steps.append({
+            "module":   f"EvidenceAnalyst/Tool:{tc.get('tool', 'unknown')}",
+            "prompt":   f"tool: {tc.get('tool')}\nargs: {tc.get('args', {})}",
+            "response": str(tc.get("result", "")),
+        })
+
+    return steps
 def call_tool(agent: 'ReActAgent', state: ReActInternalState) -> dict:
     """
     Tool node: Execute tools requested by the model.
