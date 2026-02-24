@@ -16,7 +16,6 @@ Install dependencies if needed:
 
 import sys
 import os
-import re
 import logging
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -35,6 +34,48 @@ from backend.main import (
 from backend.supabase.supabase_client import get_patients_summary
 
 log = logging.getLogger(__name__)
+
+# ─────────────────────────────────────────────────────────────────────────
+# Helpers — step extraction
+# ─────────────────────────────────────────────────────────────────────────
+
+def _build_steps_from_state(
+    route_result: dict,
+    user_prompt:  str,
+    final_state:  dict,
+) -> list[dict]:
+    """
+    Build the ordered step list for the API response.
+
+    Every node (manager_node, specialist agents, deliver_node) writes its
+    own step(s) directly into state["steps"] during execution via the
+    operator.add reducer — so order is always guaranteed by execution order.
+
+    This function simply:
+      1. Prepends the SemanticRouter step (runs before the graph)
+      2. Appends the pre-built graph steps from state["steps"]
+
+    No message parsing, no regex, no fallbacks needed.
+    """
+    # ── Step 1: SemanticRouter — always first, runs before the graph ──────
+    router_step = {
+        "module":   "SemanticRouter",
+        "prompt":   user_prompt,
+        "response": (
+            f"proposed_category={route_result.get('category')} | "
+            f"score={route_result.get('score', 0):.4f} | "
+            f"confidence={route_result.get('confidence')} | "
+            f"passed={route_result.get('passed')} | "
+            f"all_scores={route_result.get('all_scores', {})}"
+        ),
+    }
+
+    # ── Steps 2-N: read directly from state, written by each node ────────
+    # Guaranteed order: manager_node → specialist → deliver_node
+    # Tool calls are included because each node wrote them at execution time.
+    graph_steps = final_state.get("steps", [])
+
+    return [router_step] + graph_steps
 
 # ─────────────────────────────────────────────────────────────────────────
 # App initialisation
@@ -66,212 +107,7 @@ class ExecuteRequest(BaseModel):
     prompt: str
 
 
-# ─────────────────────────────────────────────────────────────────────────
-# Helpers — step extraction
-# ─────────────────────────────────────────────────────────────────────────
 
-# Mapping of bracket prefixes found in state messages → canonical module names.
-# These must match the architecture diagram exactly.
-_MODULE_MAP = {
-    "[judge]":                  "ManagerAgent/Judge",
-    "[manager → deliver_node]": "DeliverNode",
-    "[manager]":                "ManagerAgent/Judge",
-    "[blood_test_analyst]":     "BloodTestAnalyst",
-    "[skin_care_analyst]":      "SkinCareAnalyst",
-    "[evidence_analyst]":       "EvidenceAnalyst",
-    "[deliver_node]":           "DeliverNode",
-}
-
-
-def _detect_module(content: str) -> str | None:
-    """
-    Detect which module produced a trace message by matching bracketed prefixes.
-    Returns the canonical module name or None.
-    """
-    lower = content.lower()
-    for prefix, name in _MODULE_MAP.items():
-        if lower.startswith(prefix):
-            return name
-    return None
-
-
-def _parse_judge_message(content: str) -> tuple[dict, dict]:
-    """
-    Extract structured prompt/response fields from the Judge trace message.
-
-    Format written by manager_node:
-      [Judge] Patient P001 | Router proposed: 'blood_test_analysis' (0.6632, high) |
-      Judge accepted: 'blood_test_analysis' | Overridden: False | Reason: …
-    """
-    prompt_fields   = {}
-    response_fields = {}
-
-    m = re.search(r"Router proposed: '([^']+)' \(([\d.]+), (\w+)\)", content)
-    if m:
-        prompt_fields["router_proposed_category"] = m.group(1)
-        prompt_fields["router_score"]             = float(m.group(2))
-        prompt_fields["router_confidence"]        = m.group(3)
-
-    m = re.search(r"Judge accepted: '([^']+)'", content)
-    if m:
-        response_fields["accepted_category"] = m.group(1)
-
-    m = re.search(r"Overridden: (True|False)", content)
-    if m:
-        response_fields["overridden"] = m.group(1) == "True"
-
-    m = re.search(r"Reason: (.+)$", content)
-    if m:
-        response_fields["reasoning"] = m.group(1).strip()
-
-    return prompt_fields, response_fields
-
-
-def _parse_deliver_message(content: str, final_report: str | None) -> tuple[dict, dict]:
-    """
-    Extract structured fields from the deliver_node trace message.
-
-    Format:
-      [Manager → deliver_node] Final patient message generated for P001
-      (blood_test_analysis). Length: 432 chars.
-    """
-    prompt_fields   = {}
-    response_fields = {}
-
-    m = re.search(r"\(([^)]+)\)\. Length: (\d+) chars", content)
-    if m:
-        prompt_fields["request_type"]    = m.group(1)
-        response_fields["report_length"] = int(m.group(2))
-
-    if final_report:
-        response_fields["final_report"] = (
-            final_report[:500] + "…" if len(final_report) > 500 else final_report
-        )
-
-    return prompt_fields, response_fields
-
-
-def _build_steps_from_state(
-    route_result: dict,
-    user_prompt:  str,
-    final_state:  dict,
-) -> list[dict]:
-    """
-    Construct the ordered list of step objects from the router result
-    and the messages written to state by each graph node.
-
-    Step 1 — SemanticRouter       (always present — captured before graph runs)
-    Step 2 — ManagerAgent/Judge   (parsed from [Judge] trace message)
-    Step 3 — Specialist agent     (BloodTestAnalyst / SkinCareAnalyst / EvidenceAnalyst)
-    Step 4 — DeliverNode          (parsed from deliver trace message)
-    """
-    steps: list[dict] = []
-
-    # ── Step 1: SemanticRouter ────────────────────────────────────────────
-    steps.append({
-        "module": "SemanticRouter",
-        "prompt": {
-            "text":            user_prompt,
-            "method":          "cosine_similarity",
-            "embedding_model": "RPRTHPB-text-embedding-3-small",
-        },
-        "response": {
-            "proposed_category": route_result.get("category"),
-            "score":             route_result.get("score"),
-            "all_scores":        route_result.get("all_scores", {}),
-            "confidence":        route_result.get("confidence"),
-            "passed":            route_result.get("passed"),
-        },
-    })
-
-    # ── Steps 2-4: parse graph messages ──────────────────────────────────
-    messages     = final_state.get("messages", [])
-    final_report = final_state.get("final_report")
-    request_type = final_state.get("request_type", "")
-
-    specialist_module = {
-        "blood_test_analysis":   "BloodTestAnalyst",
-        "image_lesion_analysis": "SkinCareAnalyst",
-        "evidence_analyst":      "EvidenceAnalyst",
-    }.get(request_type, "SpecialistAgent")
-
-    judge_added      = False
-    specialist_added = False
-    deliver_added    = False
-
-    for msg in messages:
-        if msg.get("role") != "system":
-            continue
-
-        content = msg.get("content", "")
-        module  = _detect_module(content)
-
-        if module == "ManagerAgent/Judge" and not judge_added:
-            p, r = _parse_judge_message(content)
-            p["user_input"] = user_prompt
-            steps.append({"module": module, "prompt": p, "response": r})
-            judge_added = True
-
-        elif module == specialist_module and not specialist_added:
-            insights_key = {
-                "BloodTestAnalyst": "lab_insights",
-                "SkinCareAnalyst":  "vision_insights",
-                "EvidenceAnalyst":  "evidence_insights",
-            }.get(module, "insights")
-
-            insights = final_state.get(insights_key, "") or ""
-            steps.append({
-                "module": module,
-                "prompt": {
-                    "patient_id":   final_state.get("patient_id"),
-                    "request_type": request_type,
-                    "trace":        content[:300],
-                },
-                "response": {
-                    "insights_length":  len(insights),
-                    "insights_preview": insights[:400] + "…" if len(insights) > 400 else insights,
-                },
-            })
-            specialist_added = True
-
-        elif module == "DeliverNode" and not deliver_added:
-            p, r = _parse_deliver_message(content, final_report)
-            steps.append({"module": module, "prompt": p, "response": r})
-            deliver_added = True
-
-    # ── Fallback: specialist step not found in messages ───────────────────
-    if not specialist_added and judge_added:
-        insights_key = {
-            "blood_test_analysis":   "lab_insights",
-            "image_lesion_analysis": "vision_insights",
-            "evidence_analyst":      "evidence_insights",
-        }.get(request_type, "")
-
-        insights = (final_state.get(insights_key, "") or "") if insights_key else ""
-        steps.append({
-            "module": specialist_module,
-            "prompt": {
-                "patient_id":   final_state.get("patient_id"),
-                "request_type": request_type,
-            },
-            "response": {
-                "insights_length":  len(insights),
-                "insights_preview": insights[:400] + "…" if len(insights) > 400 else insights,
-            },
-        })
-
-    # ── Fallback: DeliverNode from final_report ───────────────────────────
-    if not deliver_added and final_report:
-        steps.append({
-            "module": "DeliverNode",
-            "prompt": {"request_type": request_type},
-            "response": {
-                "report_length": len(final_report),
-                "final_report":  final_report[:500] + "…" if len(final_report) > 500 else final_report,
-            },
-        })
-
-    return steps
 
 
 # ─────────────────────────────────────────────────────────────────────────
