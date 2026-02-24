@@ -3,7 +3,11 @@ from langchain_core.tools import tool
 from typing import Dict, Any, Literal
 from backend.agents.blood_test_analyst.data_mockups.patients_mockup import *
 from backend.agents.blood_test_analyst.data_mockups.reference_ranges_mockup import *
-
+from backend.supabase.supabase_client import (
+    get_patients_summary,
+    get_patient_lab_history,
+    fetch_patient_by_id,
+)
 
 @tool
 def search_medical_knowledge(query: str):
@@ -20,7 +24,22 @@ def search_medical_knowledge(query: str):
         """
     rag = create_medline_test_rag()
     results = rag.answer_question(query)
-    return f"Medical knowledge about '{query}': {results}"
+
+    @tool
+    def search_medical_knowledge(query: str) -> dict:
+        """
+        Search medical literature for causes, conditions, and treatments.
+        Uses RAG system with MedlinePlus database.
+        """
+        rag = create_medline_test_rag()
+        results = rag.answer_question(query)
+
+        return {
+            "rag_sys_prompt": results.get("llm_system_prompt", ""),
+            "rag_user_prompt": results.get("llm_user_prompt", ""),
+            "answer": f"Medical knowledge about '{query}': {results['answer']}"
+        }
+
 @tool
 def get_patient_history(patient_id: str) -> Dict[str, Any]:
     """
@@ -35,7 +54,7 @@ def get_patient_history(patient_id: str) -> Dict[str, Any]:
         Returns:
             Dictionary with patient data
         """
-    return get_patient(patient_id)
+    return fetch_patient_by_id(patient_id)
 
 @tool
 def check_reference_range(

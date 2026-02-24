@@ -62,13 +62,6 @@ Interpretation: {result.get('interpretation', '?')}"""
 def call_tool(agent: 'ReActAgent', state: ReActInternalState) -> dict:
     """
     Tool node: Execute tools requested by the model.
-
-    Args:
-        agent: ReActAgent instance
-        state: Current agent state
-
-    Returns:
-        Dict with tool results as messages and updated tool_calls_history
     """
     outputs = []
     tool_history = []
@@ -80,25 +73,33 @@ def call_tool(agent: 'ReActAgent', state: ReActInternalState) -> dict:
         # Get the tool and invoke it
         tool_result = agent.tools_by_name[tool_call["name"]].invoke(tool_call["args"])
 
-        print(f"   ✅ Result: {str(tool_result)[:80]}...")
-        if tool_call["name"] == "check_reference_range" or tool_call["name"] == "get_patient_history":
-            # Format result for better LLM readability
-            tool_result = _format_tool_result(tool_call["name"], tool_result)
+        # --- Handle dictionary returned by RAG tool ---
+        if tool_call["name"] == "search_medical_knowledge" and isinstance(tool_result, dict) and "answer" in tool_result:
+            content_for_agent = f"Knowledge base answer:\n{tool_result['answer']}"
+            history_result = tool_result
+        else:
+            # Handle other tools like history and reference range
+            if tool_call["name"] in ["check_reference_range", "get_patient_history"]:
+                tool_result = _format_tool_result(tool_call["name"], tool_result)
+            content_for_agent = str(tool_result)
+            history_result = str(tool_result)
+
+        print(f"   ✅ Result: {content_for_agent[:80]}...")
 
         # Create ToolMessage with formatted result
         outputs.append(
             ToolMessage(
-                content=tool_result,  # ← Use formatted version
+                content=content_for_agent,
                 name=tool_call["name"],
                 tool_call_id=tool_call["id"],
             )
         )
 
-        # Record in history (keep raw result)
+        # Record in history (keep raw result/dict)
         tool_history.append({
             "tool": tool_call["name"],
             "args": tool_call["args"],
-            "result": str(tool_result)  # Keep original for debugging
+            "result": history_result
         })
 
     # Combine with existing history
