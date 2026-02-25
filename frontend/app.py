@@ -14,13 +14,16 @@ The API server must be running separately:
 import streamlit as st
 import requests
 import os
+from dotenv import load_dotenv
 
+load_dotenv()
 # ─────────────────────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────────────────────
 
 API_BASE = os.environ.get("API_BASE_URL", "http://localhost:8000")
-EXECUTE_URL = f"{API_BASE}/api/execute"
+EXECUTE_URL = f"{API_BASE}api/execute"
+print(EXECUTE_URL)
 
 # ─────────────────────────────────────────────────────────────────────────
 # Page config  (must be first Streamlit call)

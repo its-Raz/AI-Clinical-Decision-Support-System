@@ -10,7 +10,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
-from sentence_transformers import CrossEncoder
+# from sentence_transformers import CrossEncoder
 from langchain_openai import ChatOpenAI
 from .prompts import MEDLINE_TEST_SYSTEM_PROMPT, MEDLINE_TEST_QUERY_PROMPT
 # Load environment variables
@@ -166,8 +166,8 @@ class MedlineTestRAG:
         self._initialize_embeddings()
         self._initialize_LLM()
         self._load_prompts()
-        if self.config.reranker.use_reranker:
-            self._initialize_reranker()
+        # if self.config.reranker.use_reranker:
+        #     self._initialize_reranker()
 
         if self.kb_config.bm25_weight > 0:
             self._initialize_bm25_retriever()
@@ -215,13 +215,13 @@ class MedlineTestRAG:
         else:
             raise ValueError(f"No prompts defined for knowledge base: {self.kb_name}")
 
-    def _initialize_reranker(self):
-        """Initialize cross-encoder reranker."""
-        print(f"Loading reranker model: {self.config.reranker.model_name}")
-
-        self.reranker = CrossEncoder(self.config.reranker.model_name)
-
-        print(f"✓ Reranker initialized: {self.config.reranker.model_name}")
+    # def _initialize_reranker(self):
+    #     """Initialize cross-encoder reranker."""
+    #     print(f"Loading reranker model: {self.config.reranker.model_name}")
+    #
+    #     self.reranker = CrossEncoder(self.config.reranker.model_name)
+    #
+    #     print(f"✓ Reranker initialized: {self.config.reranker.model_name}")
     def _initialize_bm25_retriever(self):
         """Load BM25 index from disk."""
         import pickle
