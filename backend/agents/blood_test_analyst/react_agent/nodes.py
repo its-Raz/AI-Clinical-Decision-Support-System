@@ -44,12 +44,20 @@ Lab History (Hemoglobin trend):
             return formatted.strip()
 
     elif tool_name == "check_reference_range":
-        # Format reference range check nicely
-        if isinstance(result, dict):
-            return f"""Test: {result.get('test_name', '?')} = {result.get('value', '?')} {result.get('unit', '')}
-Reference Range: {result.get('reference_range', '?')}
-Status: {result.get('status', '?')} ({result.get('severity', '?')})
-Interpretation: {result.get('interpretation', '?')}"""
+        # Result is now a list — batch call covers all metrics at once
+        if isinstance(result, list):
+            parts = []
+            for r in result:
+                if "error" in r:
+                    parts.append(f"  - {r.get('test_name', '?')}: {r['error']}")
+                else:
+                    parts.append(
+                        f"  - {r.get('test_name','?')} = {r.get('value','?')} {r.get('unit','')} | "
+                        f"Range: {r.get('reference_range','?')} | "
+                        f"Status: {r.get('status','?')} ({r.get('severity','?')}) | "
+                        f"Interpretation: {r.get('interpretation','?')}"
+                    )
+            return "Reference Range Results:\n" + "\n".join(parts)
 
 
 

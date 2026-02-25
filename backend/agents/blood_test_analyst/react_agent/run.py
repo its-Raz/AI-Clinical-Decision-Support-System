@@ -1,5 +1,9 @@
 """
 Run function for the ReAct agent.
+
+REFACTOR NOTE:
+  lab_result may now be either a single dict (legacy) or a List[dict] (batch).
+  All formatting and summary generation adapts to whichever form is received.
 """
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
@@ -7,7 +11,6 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, Tool
 from __init__ import ReActAgent
 from state import ReActInternalState
 
-# Import prompts
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -19,6 +22,12 @@ def _extract_react_steps(final_state: dict, initial_prompt: str) -> list[dict]:
     Convert the ReAct agent's internal messages + tool_calls_history
     into structured step objects for the API trace in chronological order.
     """
+    _TOOL_MODULE_NAMES = {
+        "get_patient_history":      "Get Patient History Data",
+        "check_reference_range":    "Check Reference Range",
+        "search_medical_knowledge": "Search Medical Information",
+    }
+
     steps = []
     messages = final_state.get("messages", [])
     tool_calls_history = final_state.get("tool_calls_history", [])
@@ -49,7 +58,7 @@ def _extract_react_steps(final_state: dict, initial_prompt: str) -> list[dict]:
 
             if response_text:
                 steps.append({
-                    "module": "BloodTestAnalyst/ReAct",
+                    "module": "Blood Test Analyst",
                     "prompt": current_prompt,
                     "response": response_text.strip(),
                 })
@@ -57,23 +66,20 @@ def _extract_react_steps(final_state: dict, initial_prompt: str) -> list[dict]:
             if has_tools:
                 for _ in msg.tool_calls:
                     try:
-                        tc = next(history_iter)
-                        res = tc.get("result", "")
+                        tc   = next(history_iter)
+                        res  = tc.get("result", "")
+                        tool = tc.get("tool", "unknown")
+                        module_name = _TOOL_MODULE_NAMES.get(tool, tool)
 
                         if isinstance(res, dict) and "rag_sys_prompt" in res:
-                            # steps.append({
-                            #     "module": "BloodTestAnalyst/RAG_LLM",
-                            #     "prompt": f"[SYSTEM]\n{res['rag_sys_prompt']}\n\n[USER]\n{res['rag_user_prompt']}",
-                            #     "response": res.get("answer", "")
-                            # })
                             steps.append({
-                                "module": f"{tc.get('tool', 'unknown')}",
+                                "module": "Search Medical Information",
                                 "prompt": f"[TOOL ARGUMENTS]\n{tc.get('args', {})}",
                                 "response": res.get("answer", "")
                             })
                         else:
                             steps.append({
-                                "module": f"{tc.get('tool', 'unknown')}",
+                                "module": module_name,
                                 "prompt": f"[TOOL ARGUMENTS]\n{tc.get('args', {})}",
                                 "response": str(res),
                             })
@@ -88,22 +94,47 @@ def run_react_agent(global_state: dict) -> dict:
     print("🔬 REACT AGENT: Starting Information Gathering")
     print("=" * 60)
 
-    patient_id = global_state['patient_id']
-    lab_result = global_state['lab_result']
+    patient_id = global_state["patient_id"]
+    lab_result = global_state["lab_result"]  # now either a dict or List[dict]
 
-    print(f"Patient: {patient_id}")
-    print(f"Lab: {lab_result['test_name']} = {lab_result['value']} {lab_result['unit']}")
+    # ── Normalise to list ─────────────────────────────────────────────────
+    # Accepts both a single-metric dict (legacy) and a list (batch refactor).
+    if isinstance(lab_result, dict):
+        lab_results = [lab_result]
+    else:
+        lab_results = lab_result   # already a list
 
-    input_text = f"Lab Result: Patient {patient_id} -  {lab_result['test_name']} {lab_result['value']} {lab_result['unit']} ({lab_result.get('flag', 'N/A')})\n"
+    # ── Format the input block for the prompt ─────────────────────────────
+    if len(lab_results) == 1:
+        r = lab_results[0]
+        input_text = (
+            f"Lab Result: Patient {patient_id} — "
+            f"{r['test_name']} {r['value']} {r['unit']} "
+            f"(Flag: {r.get('flag', 'N/A')})\n"
+        )
+        print(f"   Patient : {patient_id}")
+        print(f"   Lab     : {r['test_name']} = {r['value']} {r['unit']}")
+    else:
+        lines = "\n".join(
+            f"  - {r['test_name']}: {r['value']} {r['unit']} (Flag: {r.get('flag', 'N/A')})"
+            for r in lab_results
+        )
+        input_text = (
+            f"Lab Results: Patient {patient_id} — {len(lab_results)} abnormal metrics:\n"
+            f"{lines}\n"
+        )
+        print(f"   Patient : {patient_id}")
+        print(f"   Metrics : {[r['test_name'] for r in lab_results]}")
+
     user_prompt = REACT_PROMPT_TEMPLATE.format(input=input_text)
 
     inputs: ReActInternalState = {
         "messages": [
             SystemMessage(content=REACT_SYSTEM_PROMPT),
-            HumanMessage(content=user_prompt)
+            HumanMessage(content=user_prompt),
         ],
-        "iterations": 0,
-        "tool_calls_history": []
+        "iterations":         0,
+        "tool_calls_history": [],
     }
 
     agent = ReActAgent()
@@ -114,43 +145,40 @@ def run_react_agent(global_state: dict) -> dict:
     for state in agent.graph.stream(inputs, stream_mode="values"):
         final_state = state
 
-    observations = _extract_observations(final_state)
+    observations       = _extract_observations(final_state)
     tool_calls_history = final_state.get("tool_calls_history", [])
 
     print(f"\n📊 ReAct Phase Complete:")
-    print(f"   Tools used: {len(observations)}")
-    print(f"   Tool calls: {len(tool_calls_history)}")
-    print(f"   Iterations: {final_state['iterations']}")
+    print(f"   Tools used : {list(observations.keys())}")
+    print(f"   Tool calls : {len(tool_calls_history)}")
+    print(f"   Iterations : {final_state['iterations']}")
 
-    print("\n📝 Generating summary from observations...")
-    # NOTE: We now unpack two values to get the prompt for the trace
-    summary, summary_prompt = _generate_summary(agent, observations, patient_id, lab_result)
+    print("\n📝 Generating consolidated summary from observations...")
+    summary, summary_prompt = _generate_summary(agent, observations, patient_id, lab_results)
     print(f"   Summary length: {len(summary)} chars")
 
-    # Build chronological trace
     agent_steps = _extract_react_steps(final_state, user_prompt)
-
-    # Append the Summary Generation step to the end of the trace!
     agent_steps.append({
-        "module": "Final Analysis",
-        "prompt": f"[USER]\n{summary_prompt}",
-        "response": summary
+        "module":   "Final Analysis",
+        "prompt":   f"[USER]\n{summary_prompt}",
+        "response": summary,
     })
 
-    # Return only the fields we want to update in the global graph state
     return {
         "lab_insights": summary,
-        "steps": agent_steps
+        "steps":        agent_steps,
     }
 
 
 def _extract_observations(final_state: ReActInternalState) -> dict:
-    observations = {}
+    """Collect all tool outputs keyed by tool name."""
+    observations  = {}
     tool_call_map = {}
+
     for message in final_state["messages"]:
         if isinstance(message, AIMessage) and message.tool_calls:
             for tool_call in message.tool_calls:
-                tool_call_map[tool_call['id']] = tool_call['name']
+                tool_call_map[tool_call["id"]] = tool_call["name"]
 
     for message in final_state["messages"]:
         if isinstance(message, ToolMessage):
@@ -162,31 +190,61 @@ def _extract_observations(final_state: ReActInternalState) -> dict:
     return observations
 
 
-def _generate_summary(agent, observations: dict, patient_id: str, lab_result: dict) -> tuple[str, str]:
+def _generate_summary(
+    agent,
+    observations: dict,
+    patient_id: str,
+    lab_results: list,   # always a list now
+) -> tuple[str, str]:
+    """
+    Build a consolidated summary prompt covering ALL lab results and invoke
+    the LLM once to produce a single clinical narrative.
+    """
+    # ── Patient history ───────────────────────────────────────────────────
     patient_history = ""
-    if 'get_patient_history' in observations:
+    if "get_patient_history" in observations:
         patient_history = f"1. PATIENT HISTORY:\n{observations['get_patient_history'][0]}"
 
-    reference_check = ""
-    if 'check_reference_range' in observations:
-        reference_check = f"\n2. REFERENCE RANGE CHECK:\n{observations['check_reference_range'][0]}"
+    # ── Reference range checks — one entry per metric ─────────────────────
+    reference_checks = ""
+    if "check_reference_range" in observations:
+        entries = observations["check_reference_range"]
+        if len(entries) == 1:
+            reference_checks = f"\n2. REFERENCE RANGE CHECK:\n{entries[0]}"
+        else:
+            numbered = "\n\n".join(f"  [{i+1}] {e}" for i, e in enumerate(entries))
+            reference_checks = f"\n2. REFERENCE RANGE CHECKS ({len(entries)} metrics):\n{numbered}"
 
+    # ── Medical knowledge — all RAG calls combined ────────────────────────
     medical_knowledge = ""
-    if 'search_medical_knowledge' in observations:
-        medical_knowledge = f"\n3. MEDICAL KNOWLEDGE:\n{observations['search_medical_knowledge'][0]}"
+    if "search_medical_knowledge" in observations:
+        entries = observations["search_medical_knowledge"]
+        if len(entries) == 1:
+            medical_knowledge = f"\n3. MEDICAL KNOWLEDGE:\n{entries[0]}"
+        else:
+            numbered = "\n\n".join(f"  [{i+1}] {e}" for i, e in enumerate(entries))
+            medical_knowledge = f"\n3. MEDICAL KNOWLEDGE ({len(entries)} searches):\n{numbered}"
+
+    # ── Lab results header for the prompt ────────────────────────────────
+    if len(lab_results) == 1:
+        r = lab_results[0]
+        lab_results_summary = (
+            f"{r['test_name']} = {r['value']} {r['unit']} (Flag: {r.get('flag', 'N/A')})"
+        )
+    else:
+        lines = "\n".join(
+            f"  - {r['test_name']}: {r['value']} {r['unit']} (Flag: {r.get('flag', 'N/A')})"
+            for r in lab_results
+        )
+        lab_results_summary = f"{len(lab_results)} abnormal metrics:\n{lines}"
 
     summary_prompt = SUMMARY_GENERATION_PROMPT.format(
-        patient_id=patient_id,
-        test_name=lab_result['test_name'],
-        value=lab_result['value'],
-        unit=lab_result['unit'],
-        flag=lab_result.get('flag', 'N/A'),
-        patient_history=patient_history,
-        reference_check=reference_check,
-        medical_knowledge=medical_knowledge
+        patient_id         = patient_id,
+        lab_results_summary = lab_results_summary,
+        patient_history    = patient_history,
+        reference_checks   = reference_checks,
+        medical_knowledge  = medical_knowledge,
     )
 
     response = agent.llm.invoke([HumanMessage(content=summary_prompt)])
-
-    # Return both the generated text AND the prompt we used
     return response.content, summary_prompt

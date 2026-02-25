@@ -105,7 +105,7 @@ def _extract_react_steps(final_state: dict, query: str) -> list[dict]:
                         # ---> FIX 2: Format the tool name beautifully
                         raw_tool_name = tc.get('tool', 'unknown')
                         if raw_tool_name == "search_medical_knowledge":
-                            display_tool_name = "Search Medical Knowledge"
+                            display_tool_name = "Search Medical Information"
                         else:
                             display_tool_name = raw_tool_name
 
