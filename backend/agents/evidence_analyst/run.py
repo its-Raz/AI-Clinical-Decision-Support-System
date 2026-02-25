@@ -60,73 +60,65 @@ def _extract_react_steps(final_state: dict, query: str) -> list[dict]:
     messages = final_state.get("messages", [])
     tool_calls_history = final_state.get("tool_calls_history", [])
 
-    # 1. יוצרים איטרטור שיאפשר לנו למשוך כלים אחד-אחד לפי הסדר
     history_iter = iter(tool_calls_history)
 
     from backend.agents.evidence_analyst.prompts import REACT_SYSTEM_PROMPT
 
-    # הפרומפט הראשוני
     current_prompt = f"[SYSTEM]\n{REACT_SYSTEM_PROMPT}\n\n[USER]\n{query}"
 
     for msg in messages:
         msg_type = type(msg).__name__
 
-        # אם זו תצפית מכלי, אנחנו רק מעדכנים את הפרומפט לאיטרציה הבאה של המודל
         if msg_type == "ToolMessage":
             content = msg.content if isinstance(msg.content, str) else str(msg.content)
             current_prompt = f"[TOOL OBSERVATION]\n{content}"
 
-        # אם זו הודעת מודל, אנחנו שומרים אותה
         elif msg_type == "AIMessage":
             content = msg.content if isinstance(msg.content, str) else str(msg.content)
             response_text = content.strip()
 
-            # בודקים אם המודל ביקש להפעיל כלים
             has_tools = hasattr(msg, "tool_calls") and msg.tool_calls
 
             if has_tools:
                 tool_desc = ", ".join([f"{tc['name']}({tc['args']})" for tc in msg.tool_calls])
                 response_text += f"\n[Tool Call Triggered: {tool_desc}]"
 
-            # למקרה שהמודל החזיר רק Tool Call בלי טקסט חופשי
             if not response_text and has_tools:
                 response_text = "[Tool Call Only]"
 
+            # ---> FIX 1: Name the final synthesis step "Analyze and Report"
+            module_name = "Evidence Analyst" if has_tools else "Analyze and Report"
+
             if response_text:
                 steps.append({
-                    "module": "EvidenceAnalyst/ReAct",
+                    "module": module_name,
                     "prompt": current_prompt,
                     "response": response_text.strip(),
                 })
 
-            # --- התיקון הקריטי ---
-            # מיד אחרי שהמודל ביקש כלי, אנחנו שולפים את ביצוע הכלי מההיסטוריה ומכניסים ל-Steps!
             if has_tools:
                 for _ in msg.tool_calls:
                     try:
                         tc = next(history_iter)
                         res = tc.get("result", "")
 
-                        # אם ה-RAG החזיר את המילון המורחב עם הפרומפטים
-                        if isinstance(res, dict) and "rag_sys_prompt" in res:
-                            # שלב א': איך ה-LLM הפנימי של ה-RAG עבד
-                            steps.append({
-                                "module": "EvidenceAnalyst/RAG_LLM",
-                                "prompt": f"[SYSTEM]\n{res['rag_sys_prompt']}\n\n[USER]\n{res['rag_user_prompt']}",
-                                "response": res.get("answer", "")
-                            })
+                        # ---> FIX 2: Format the tool name beautifully
+                        raw_tool_name = tc.get('tool', 'unknown')
+                        if raw_tool_name == "search_medical_knowledge":
+                            display_tool_name = "Search Medical Knowledge"
+                        else:
+                            display_tool_name = raw_tool_name
 
-                            # שלב ב': הכלי עצמו כפי שהוא מוחזר לסוכן
+                        if isinstance(res, dict) and "rag_sys_prompt" in res:
                             steps.append({
-                                "module": f"EvidenceAnalyst/Tool:{tc.get('tool', 'unknown')}",
-                                "prompt": f"[TOOL ARGUMENTS]\n{tc.get('args', {})}",
+                                "module": display_tool_name,
+                                "prompt": f"[TOOL ARGUMENTS]\n{str(tc.get('args', {}))}",
                                 "response": res.get("answer", "")
                             })
                         else:
-                            # Fallback לכלים פשוטים
                             steps.append({
-                                "module": f"EvidenceAnalyst/Tool:{tc.get('tool', 'unknown')}",
-                                "prompt": f"[TOOL ARGUMENTS]\n{tc.get('args', {})}",
+                                "module": display_tool_name,
+                                "prompt": f"[TOOL ARGUMENTS]\n{str(tc.get('args', {}))}",
                                 "response": str(res),
                             })
                     except StopIteration:

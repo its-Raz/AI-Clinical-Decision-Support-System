@@ -103,14 +103,14 @@ def manager_node(state: dict, llm) -> dict:
 
     # ── Step 1: the LLM call ──────────────────────────────────────────
     judge_step = {
-        "module": "ManagerAgent/Judge",
+        "module": "Manager Agent",
         "prompt": full_prompt_text,
         "response": response.content or f"[tool call triggered] {args}",
     }
 
     # ── Step 2: the tool call result ──────────────────────────────────
     tool_step = {
-        "module": "judge_decision (tool)",
+        "module": "Judge Decision",
         "prompt": (
             f"accepted_category: {accepted_category}\n"
             f"reasoning: {reasoning}\n"
@@ -259,7 +259,7 @@ def deliver_node(state: dict, llm) -> dict:
     }
 
     deliver_step = {
-        "module": "DeliverNode",
+        "module": "Deliver Node",
         "prompt": full_prompt_text,
         "response": final_report,
     }

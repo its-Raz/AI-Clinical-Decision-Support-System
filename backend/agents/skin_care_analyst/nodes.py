@@ -36,7 +36,7 @@ def classify_node(state: dict, llm) -> dict:
 
     # ── Step: YOLO classification tool call ───────────────────────────
     classify_step = {
-        "module":   "SkinCareAnalyst/Tool:classify_skin_lesion",
+        "module":   "Classify Skin Lesion",
         "prompt":   f"tool: classify_skin_lesion\nargs: image_path={image_path}",
         "response": (
             f"label={vision_results.get('label')} | "
@@ -94,7 +94,7 @@ def report_node(state: dict, llm) -> dict:
 
     # ── Step: LLM report generation ───────────────────────────────────
     report_step = {
-        "module":   "SkinCareAnalyst/ReportNode",
+        "module":   "Analyze and Report",
         "prompt":   prompt,
         "response": report,
     }

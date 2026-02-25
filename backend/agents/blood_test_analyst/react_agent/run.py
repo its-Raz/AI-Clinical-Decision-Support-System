@@ -61,19 +61,19 @@ def _extract_react_steps(final_state: dict, initial_prompt: str) -> list[dict]:
                         res = tc.get("result", "")
 
                         if isinstance(res, dict) and "rag_sys_prompt" in res:
+                            # steps.append({
+                            #     "module": "BloodTestAnalyst/RAG_LLM",
+                            #     "prompt": f"[SYSTEM]\n{res['rag_sys_prompt']}\n\n[USER]\n{res['rag_user_prompt']}",
+                            #     "response": res.get("answer", "")
+                            # })
                             steps.append({
-                                "module": "BloodTestAnalyst/RAG_LLM",
-                                "prompt": f"[SYSTEM]\n{res['rag_sys_prompt']}\n\n[USER]\n{res['rag_user_prompt']}",
-                                "response": res.get("answer", "")
-                            })
-                            steps.append({
-                                "module": f"BloodTestAnalyst/Tool:{tc.get('tool', 'unknown')}",
+                                "module": f"{tc.get('tool', 'unknown')}",
                                 "prompt": f"[TOOL ARGUMENTS]\n{tc.get('args', {})}",
                                 "response": res.get("answer", "")
                             })
                         else:
                             steps.append({
-                                "module": f"BloodTestAnalyst/Tool:{tc.get('tool', 'unknown')}",
+                                "module": f"{tc.get('tool', 'unknown')}",
                                 "prompt": f"[TOOL ARGUMENTS]\n{tc.get('args', {})}",
                                 "response": str(res),
                             })
@@ -132,7 +132,7 @@ def run_react_agent(global_state: dict) -> dict:
 
     # Append the Summary Generation step to the end of the trace!
     agent_steps.append({
-        "module": "BloodTestAnalyst/SummaryGenerator",
+        "module": "Final Analysis",
         "prompt": f"[USER]\n{summary_prompt}",
         "response": summary
     })

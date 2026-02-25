@@ -59,7 +59,7 @@ def _build_steps_from_state(
     """
     # ── Step 1: SemanticRouter — always first, runs before the graph ──────
     router_step = {
-        "module":   "SemanticRouter",
+        "module":   "Semantic Router",
         "prompt":   user_prompt,
         "response": (
             f"proposed_category={route_result.get('category')} | "
@@ -215,7 +215,7 @@ async def agent_info():
                         },
                     },
                     {
-                        "module": "DeliverNode",
+                        "module": "Deliver Node",
                         "prompt": {"request_type": "blood_test_analysis"},
                         "response": {
                             "report_length": 0,       # ← replace with real length
@@ -341,7 +341,7 @@ async def execute(body: ExecuteRequest):
         # ── Spam gate ─────────────────────────────────────────────────────
         if not passed:
             steps.append({
-                "module": "SemanticRouter",
+                "module": "Semantic Router",
                 "prompt": {
                     "text":   user_prompt,
                     "method": "cosine_similarity",
@@ -363,32 +363,11 @@ async def execute(body: ExecuteRequest):
                 "steps": steps,
             })
 
-        # ── image_lesion_analysis — cannot process without an image ───────
-        if proposed_category == "image_lesion_analysis":
-            steps.append({
-                "module": "SemanticRouter",
-                "prompt": {"text": user_prompt, "method": "cosine_similarity"},
-                "response": {
-                    "proposed_category": proposed_category,
-                    "score":             router_score,
-                    "confidence":        router_confidence,
-                    "passed":            True,
-                },
-            })
-            return JSONResponse(content={
-                "status":   "ok",
-                "error":    None,
-                "response": (
-                    "Skin lesion analysis requires an image upload. "
-                    "Please use the Clinical Portal web interface to upload "
-                    "a photo of the lesion for analysis."
-                ),
-                "steps": steps,
-            })
-
         # ── Build state ───────────────────────────────────────────────────
         # For blood test analysis the API uses the first available patient's
         # most recent lab results from Supabase as a demonstration dataset.
+        # For skin care analysis the demo image is used automatically by
+        # run_skin_care_analyst when image_path is None.
         patient_id = "API_USER"
 
         if proposed_category == "blood_test_analysis":
@@ -413,6 +392,28 @@ async def execute(body: ExecuteRequest):
                 patient_id        = patient_id,
                 lab_result        = lab_result,
             )
+
+        elif proposed_category == "image_lesion_analysis":
+            # No image upload in the API — run_skin_care_analyst falls back
+            # to the bundled demo image automatically when image_path is None.
+            initial_state = {
+                "request_type":             proposed_category,
+                "patient_id":               patient_id,
+                "raw_user_input":           user_prompt,
+                "router_proposed_category": proposed_category,
+                "router_score":             router_score,
+                "router_confidence":        router_confidence,
+                "lab_result":               None,
+                "lab_insights":             None,
+                "image_path":               None,   # triggers demo fallback
+                "vision_results":           None,
+                "vision_insights":          None,
+                "evidence_insights":        None,
+                "messages":                 [],
+                "next_step":                "",
+                "final_report":             None,
+                "steps":                    [],
+            }
 
         else:  # evidence_analyst
             initial_state = build_evidence_state(
