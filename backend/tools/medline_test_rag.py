@@ -24,7 +24,7 @@ class KnowledgeBaseConfig(BaseModel):
 
     name: str = Field(..., description="Display name of the knowledge base")
     description: str = Field(..., description="Description of the knowledge base")
-    bm25_index_path: str = Field(..., description="Path to BM25 index file")
+
     pinecone_index_name: str = Field(..., description="Environment variable name for Pinecone index")
     embedding_model: str = Field(..., description="Embedding model name")
     LLM_model: str = Field(..., description="LLN model name")
@@ -35,18 +35,7 @@ class KnowledgeBaseConfig(BaseModel):
     vector_weight: float = Field(default=0.5, ge=0.0, le=1.0, description="Weight for vector results")
     final_k: int = Field(default=10, description="Final number of results after fusion")
 
-    @field_validator('bm25_index_path')
-    def validate_bm25_path(cls, v):
-        """Ensure BM25 index path exists."""
-        path = Path(v)
-        if not path.is_absolute():
-            # Resolve relative to this file's directory
-            script_dir = Path(__file__).parent
-            path = (script_dir / path).resolve()
 
-        if not path.exists():
-            raise ValueError(f"BM25 index not found at: {path}")
-        return str(path)
 
     @field_validator('pinecone_index_name')
     def validate_pinecone_index(cls, v):
