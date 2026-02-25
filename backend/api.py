@@ -353,19 +353,27 @@ async def agent_info():
 # C)  GET /api/model_architecture
 # ─────────────────────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────────────────
+# C)  GET /api/model_architecture
+# ─────────────────────────────────────────────────────────────────────────
+
 @app.get("/api/model_architecture")
 async def model_architecture():
     """
-    Return the system architecture as a PNG image.
-    Generated in memory by matplotlib — no static file needed.
+    Return the architecture diagram (arch.png) as a PNG image.
+    The file is read from the same directory as this api.py file (backend/).
     """
+    arch_path = os.path.join(os.path.dirname(__file__), "arch.png")
+    if not os.path.isfile(arch_path):
+        log.error("model_architecture: arch.png not found at %s", arch_path)
+        raise HTTPException(status_code=404, detail="arch.png not found in backend directory")
     try:
-        from backend.architecture_diagram import generate_architecture_png
-        png_bytes = generate_architecture_png()
+        with open(arch_path, "rb") as f:
+            png_bytes = f.read()
         return Response(content=png_bytes, media_type="image/png")
     except Exception as e:
-        log.exception("model_architecture: failed to generate PNG")
-        raise HTTPException(status_code=500, detail=f"Diagram generation failed: {e}")
+        log.exception("model_architecture: failed to read arch.png")
+        raise HTTPException(status_code=500, detail=f"Failed to read architecture image: {e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────
