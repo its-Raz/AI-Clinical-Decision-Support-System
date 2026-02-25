@@ -6,7 +6,7 @@ services:
     startCommand: poetry run uvicorn backend.api:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: "3.11.0"
+        value: "3.12.3"   # ← was "3.11.0", but 3.11 may not be available; 3.12 is safe
 
   - type: web
     name: clinical-app
@@ -15,6 +15,6 @@ services:
     startCommand: poetry run streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0
     envVars:
       - key: PYTHON_VERSION
-        value: "3.11.0"
+        value: "3.12.3"
       - key: API_BASE_URL
-        value: https://clinical-api.onrender.com   # update after step 3
+        value: https://clinical-api.onrender.com
