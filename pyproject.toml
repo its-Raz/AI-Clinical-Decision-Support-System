@@ -1,38 +1,35 @@
-[project]
+[tool.poetry]
 name = "autonomousclinicalsystem"
 version = "0.1.0"
-description = "AI-Powered Clinical Decision Support System"
-authors = [
-    {name = "razbi", email = "razhaim101@gmail.com"}
-]
+description = ""
+authors = ["Raz Bismuth <razbismuth5@gmail.com>"]
 readme = "README.md"
-requires-python = ">=3.11,<3.13"
-dependencies = [
-    "langchain>=0.2.0,<0.3.0",
-    "langchain-community>=0.2.0,<0.3.0",
-    "langchain-openai>=0.1.0,<0.2.0",
-    "langchain-pinecone>=0.1.0,<0.2.0",
-    "langgraph>=0.1.0,<0.2.0",
-    "pinecone-client>=4.0.0,<6.0.0",
-    "tiktoken>=0.7.0,<1.0.0",
-    "fastapi>=0.111.0,<0.120.0",
-    "uvicorn>=0.30.0,<0.40.0",
-    "python-dotenv>=1.0.0,<2.0.0",
-    "pydantic>=2.7.0,<3.0.0",
-    "numpy<2.0.0",
-    "matplotlib>=3.9.0,<4.0.0",
-    "rank-bm25 (>=0.2.2,<0.3.0)",
-    "ragas (>=0.4.3,<0.5.0)",
-    "sentence-transformers (>=5.2.2,<6.0.0)",
-    "ultralytics (>=8.4.14,<9.0.0)",
-    "streamlit (>=1.54.0,<2.0.0)",
-    "supabase (>=2.28.0,<3.0.0)",
-    "requests (>=2.32.5,<3.0.0)"
-]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+fastapi = "^0.115.8"
+uvicorn = "^0.34.0"
+pydantic = "^2.10.6"
+python-dotenv = "^1.0.1"
+supabase = "^2.12.0"
+streamlit = "^1.42.0"
+openai = "^1.63.2"
+langgraph = "^0.2.72"
+langchain-openai = "^0.3.5"
+requests = "^2.32.3"
+beautifulsoup4 = "^4.13.3"
+pinecone = "^6.0.1"
+ultralytics = "^8.3.79"
+
+torch = {version = "^2.0.0", source = "pytorch-cpu"}
+torchvision = {version = "^0.15.0", source = "pytorch-cpu"}
+
+
+[[tool.poetry.source]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
+requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.poetry]
-package-mode = false
