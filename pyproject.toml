@@ -21,8 +21,8 @@ beautifulsoup4 = "^4.13.3"
 pinecone = "^6.0.1"
 ultralytics = "^8.3.79"
 
-torch = {version = "^2.0.0", source = "pytorch-cpu"}
-torchvision = {version = "^0.15.0", source = "pytorch-cpu"}
+torch = {version = "*", source = "pytorch-cpu"}
+torchvision = {version = "*", source = "pytorch-cpu"}
 
 
 [[tool.poetry.source]]
