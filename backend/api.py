@@ -86,7 +86,14 @@ app = FastAPI(
     description="Multi-agent clinical AI: semantic routing, LLM judge, specialist agents.",
     version="1.0.0",
 )
+from fastapi.middleware.cors import CORSMiddleware
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # tighten to your Streamlit URL after deploy
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.on_event("startup")
 async def startup_event():
