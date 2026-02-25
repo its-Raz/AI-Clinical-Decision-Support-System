@@ -169,14 +169,12 @@ class MedlineTestRAG:
         # if self.config.reranker.use_reranker:
         #     self._initialize_reranker()
 
-        if self.kb_config.bm25_weight > 0:
-            self._initialize_bm25_retriever()
+
 
         if self.kb_config.vector_weight > 0:
             self._initialize_vector_retriever()
 
-        if self.kb_config.bm25_weight > 0 and self.kb_config.vector_weight > 0:
-            self._initialize_ensemble_retriever()
+
         print(f"✓ RAG system ready!")
 
     def _initialize_embeddings(self):
@@ -222,21 +220,7 @@ class MedlineTestRAG:
     #     self.reranker = CrossEncoder(self.config.reranker.model_name)
     #
     #     print(f"✓ Reranker initialized: {self.config.reranker.model_name}")
-    def _initialize_bm25_retriever(self):
-        """Load BM25 index from disk."""
-        import pickle
 
-        bm25_path = Path(self.kb_config.bm25_index_path)
-
-        print(f"Loading BM25 index from: {bm25_path}")
-
-        with open(bm25_path, 'rb') as f:
-            self.bm25_retriever = pickle.load(f)
-
-        # Set k for BM25
-        self.bm25_retriever.k = self.kb_config.bm25_k
-
-        print(f"BM25 retriever loaded ({len(self.bm25_retriever.docs)} documents)")
 
     def _initialize_vector_retriever(self):
         """Initialize Pinecone vector store retriever."""
@@ -261,20 +245,7 @@ class MedlineTestRAG:
 
         print(f"✓ Vector retriever initialized")
 
-    def _initialize_ensemble_retriever(self):
-        """Initialize EnsembleRetriever with RRF."""
-        print(f"Creating EnsembleRetriever with weights: "
-              f"BM25={self.kb_config.bm25_weight}, "
-              f"Vector={self.kb_config.vector_weight}")
 
-        # EnsembleRetriever automatically uses RRF (Reciprocal Rank Fusion)
-        self.ensemble_retriever = EnsembleRetriever(
-            retrievers=[self.bm25_retriever, self.vector_retriever],
-            weights=[self.kb_config.bm25_weight, self.kb_config.vector_weight],
-            c=self.config.rrf.c  # RRF constant (default is 60)
-        )
-
-        print(f"✓ EnsembleRetriever created (using RRF)")
 
     def _deduplicate_results(self, results: List[Document]) -> List[Document]:
         unique_results = []
