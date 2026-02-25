@@ -118,7 +118,7 @@ class ExecuteRequest(BaseModel):
 async def team_info():
     """Return student details and team metadata."""
     return JSONResponse(content={
-        "group_batch_order_number": "1",   # ← e.g. "2_5"
+        "group_batch_order_number": "1_12",   # ← e.g. "2_5"
         "team_name": "Shalev,Anat and Raz",                    # ← your team name
         "students": [
             {"name": "Anat Lorman", "email": "lormana@campus.techion.ac.il"},
