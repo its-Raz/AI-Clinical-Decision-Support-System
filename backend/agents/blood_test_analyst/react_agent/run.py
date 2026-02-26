@@ -194,18 +194,34 @@ def _generate_summary(
     agent,
     observations: dict,
     patient_id: str,
-    lab_results: list,   # always a list now
+    lab_results: list,
 ) -> tuple[str, str]:
     """
     Build a consolidated summary prompt covering ALL lab results and invoke
-    the LLM once to produce a single clinical narrative.
+    a dedicated lightweight LLM instance to produce a single clinical narrative.
     """
+    from langchain_openai import ChatOpenAI
+    import os
+
+    # ── Dedicated summary LLM — built from config, no reasoning overhead ──
+    llm_config = agent.config['llm']
+    api_key    = os.getenv(llm_config['api_key_env'])
+
+    summary_llm = ChatOpenAI(
+        model=llm_config['model'],
+        temperature=1.0,
+        openai_api_key=api_key,
+        base_url=llm_config.get('base_url'),
+        max_tokens=2000,
+        reasoning_effort="low"
+    )
+
     # ── Patient history ───────────────────────────────────────────────────
     patient_history = ""
     if "get_patient_history" in observations:
         patient_history = f"1. PATIENT HISTORY:\n{observations['get_patient_history'][0]}"
 
-    # ── Reference range checks — one entry per metric ─────────────────────
+    # ── Reference range checks ────────────────────────────────────────────
     reference_checks = ""
     if "check_reference_range" in observations:
         entries = observations["check_reference_range"]
@@ -215,7 +231,7 @@ def _generate_summary(
             numbered = "\n\n".join(f"  [{i+1}] {e}" for i, e in enumerate(entries))
             reference_checks = f"\n2. REFERENCE RANGE CHECKS ({len(entries)} metrics):\n{numbered}"
 
-    # ── Medical knowledge — all RAG calls combined ────────────────────────
+    # ── Medical knowledge ─────────────────────────────────────────────────
     medical_knowledge = ""
     if "search_medical_knowledge" in observations:
         entries = observations["search_medical_knowledge"]
@@ -225,7 +241,7 @@ def _generate_summary(
             numbered = "\n\n".join(f"  [{i+1}] {e}" for i, e in enumerate(entries))
             medical_knowledge = f"\n3. MEDICAL KNOWLEDGE ({len(entries)} searches):\n{numbered}"
 
-    # ── Lab results header for the prompt ────────────────────────────────
+    # ── Lab results header ────────────────────────────────────────────────
     if len(lab_results) == 1:
         r = lab_results[0]
         lab_results_summary = (
@@ -239,12 +255,24 @@ def _generate_summary(
         lab_results_summary = f"{len(lab_results)} abnormal metrics:\n{lines}"
 
     summary_prompt = SUMMARY_GENERATION_PROMPT.format(
-        patient_id         = patient_id,
+        patient_id          = patient_id,
         lab_results_summary = lab_results_summary,
-        patient_history    = patient_history,
-        reference_checks   = reference_checks,
-        medical_knowledge  = medical_knowledge,
+        patient_history     = patient_history,
+        reference_checks    = reference_checks,
+        medical_knowledge   = medical_knowledge,
     )
 
-    response = agent.llm.invoke([HumanMessage(content=summary_prompt)])
+    print(f"📝 [_generate_summary] Invoking summary LLM (model={llm_config['model']}, max_tokens=2500, temp=1)...")
+    response = summary_llm.invoke([HumanMessage(content=summary_prompt)])
+
+    # ── Debug token usage ─────────────────────────────────────────────────
+    usage = getattr(response, "response_metadata", {}).get("token_usage", {})
+    reasoning_tokens  = usage.get("completion_tokens_details", {}).get("reasoning_tokens", 0)
+    completion_tokens = usage.get("completion_tokens", 0)
+    print(f"   tokens — prompt: {usage.get('prompt_tokens', 0)} | completion: {completion_tokens} | reasoning: {reasoning_tokens}")
+
+    if not response.content:
+        print("⚠️  [_generate_summary] Empty response — returning fallback")
+        return "Summary generation failed. Please review the raw observations above.", summary_prompt
+
     return response.content, summary_prompt

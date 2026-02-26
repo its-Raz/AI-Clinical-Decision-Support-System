@@ -24,18 +24,22 @@ def _format_tool_result(tool_name: str, result: any) -> str:
         Formatted string
     """
     if tool_name == "get_patient_history":
-        # Format patient history nicely
         if isinstance(result, dict):
             formatted = f"""Patient: {result.get('name', 'Unknown')} ({result.get('age', '?')}yo {result.get('sex', '?')})
 
 Chronic Conditions:
 {', '.join(result.get('chronic_conditions', [])) or 'None'}
 
-Lab History (Hemoglobin trend):
+Lab History:
 """
             for entry in result.get('lab_history', []):
-                hgb = entry.get('Hemoglobin', {})
-                formatted += f"  {entry.get('date', '?')}: {hgb.get('value', '?')} {hgb.get('unit', '')} ({hgb.get('flag', 'unknown')})\n"
+                date = entry.get('date', '?')
+                metrics = [
+                    f"{key}: {val.get('value', '?')} {val.get('unit', '')} ({val.get('flag', 'unknown')})"
+                    for key, val in entry.items()
+                    if key != 'date' and isinstance(val, dict)
+                ]
+                formatted += f"  {date}: {' | '.join(metrics)}\n"
 
             formatted += "\nRecent Clinical Notes:\n"
             for note in result.get('recent_notes', []):
@@ -44,7 +48,6 @@ Lab History (Hemoglobin trend):
             return formatted.strip()
 
     elif tool_name == "check_reference_range":
-        # Result is now a list — batch call covers all metrics at once
         if isinstance(result, list):
             parts = []
             for r in result:
@@ -58,6 +61,12 @@ Lab History (Hemoglobin trend):
                         f"Interpretation: {r.get('interpretation','?')}"
                     )
             return "Reference Range Results:\n" + "\n".join(parts)
+
+    # Fallback
+    if isinstance(result, dict):
+        import json
+        return json.dumps(result, indent=2)
+    return str(result)
 
 
 
