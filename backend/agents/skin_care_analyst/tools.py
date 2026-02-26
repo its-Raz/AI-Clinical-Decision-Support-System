@@ -76,3 +76,9 @@ def classify_skin_lesion(image_path: str) -> Dict[str, Any]:
 
     except Exception as e:
         return {"error": f"Classification failed: {str(e)}"}
+
+
+def preload_model():
+    """Explicitly load the YOLO model at startup so first request is not slow."""
+    _load_model()
+    print("✅ [tools] YOLO model loaded and ready")
