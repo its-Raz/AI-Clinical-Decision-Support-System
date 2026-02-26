@@ -8,9 +8,9 @@ from dotenv import load_dotenv
 import os
 import yaml
 
-from state import ReActInternalState
-from nodes import call_model, call_tool
-from edges import should_continue
+from backend.agents.blood_test_analyst.react_agent.state import ReActInternalState
+from backend.agents.blood_test_analyst.react_agent.nodes import call_model, call_tool
+from backend.agents.blood_test_analyst.react_agent.edges import should_continue
 
 # Import tools from parent directory
 import sys

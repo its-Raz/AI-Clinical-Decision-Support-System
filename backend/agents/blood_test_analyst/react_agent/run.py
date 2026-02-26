@@ -14,7 +14,7 @@ from state import ReActInternalState
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from prompts import REACT_SYSTEM_PROMPT, REACT_PROMPT_TEMPLATE, SUMMARY_GENERATION_PROMPT
+from backend.agents.blood_test_analyst.react_agent.prompts import REACT_SYSTEM_PROMPT, REACT_PROMPT_TEMPLATE, SUMMARY_GENERATION_PROMPT
 
 
 def _extract_react_steps(final_state: dict, initial_prompt: str) -> list[dict]:

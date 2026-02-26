@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from . import ReActAgent
 
-from state import ReActInternalState
+from backend.agents.blood_test_analyst.react_agent.state import ReActInternalState
 
 
 def should_continue(agent: 'ReActAgent', state: ReActInternalState) -> str:

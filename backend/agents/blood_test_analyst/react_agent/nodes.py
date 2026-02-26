@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from . import ReActAgent
 
-from state import ReActInternalState
+from backend.agents.blood_test_analyst.react_agent.state import ReActInternalState
 import json
-from utils import _print_messages,_print_response
+from backend.agents.blood_test_analyst.react_agent.utils import _print_messages,_print_response
 
 def _format_tool_result(tool_name: str, result: any) -> str:
     """
