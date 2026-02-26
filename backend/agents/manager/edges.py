@@ -12,8 +12,10 @@ def route_after_manager(state: dict) -> str:
 
     routes = {
         "blood_test_analyst": "blood_test_analyst",
-        "skin_care_analyst":  "skin_care_analyst",   # reserved for next iteration
-        "evidence_analyst": "evidence_analyst"
+        "skin_care_analyst":  "skin_care_analyst",
+        "evidence_analyst":   "evidence_analyst",
+        "clarification_needed": "deliver",
+        "unsupported":          "deliver",
     }
 
     destination = routes.get(next_step, "deliver")

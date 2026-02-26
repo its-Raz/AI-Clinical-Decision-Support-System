@@ -3,7 +3,7 @@ embedding:
   BASE_URL: "https://api.llmod.ai/v1"
 
 routing:
-  lower_threshold: 0.30   # below this → spam/garbage, drop immediately
+  lower_threshold: 0.0   # below this → spam/garbage, drop immediately
   upper_threshold: 0.45   # above this → high confidence, pass to Judge
 
 routes:

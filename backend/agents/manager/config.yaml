@@ -3,4 +3,4 @@ llm:
   temperature: 1
   api_key_env: "OPENAI_API_KEY"  # References .env variable
   base_url: "https://api.llmod.ai/v1"
-  max_tokens: 6000
+  max_tokens: 800

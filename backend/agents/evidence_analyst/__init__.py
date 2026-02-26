@@ -60,7 +60,8 @@ class ReActAgent:
             temperature=llm_config['temperature'],
             openai_api_key=api_key,
             base_url=llm_config.get('base_url'),  # Optional base_url
-            max_tokens=llm_config.get('max_tokens')  # Optional max_tokens
+            max_tokens=llm_config.get('max_tokens'),  # Optional max_tokens
+            reasoning_effort="low"
         )
 
         # Define tools

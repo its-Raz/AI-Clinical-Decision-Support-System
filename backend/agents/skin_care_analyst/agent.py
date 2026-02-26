@@ -44,6 +44,7 @@ class SkinCareAgent:
             openai_api_key=api_key,
             base_url=llm_cfg.get("base_url"),
             max_tokens=llm_cfg.get("max_tokens"),
+            reasoning_effort="low"
         )
 
         self.graph = self._build_graph()

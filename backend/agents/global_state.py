@@ -29,6 +29,7 @@ class AgentState(TypedDict):
     # ── Graph internals ─────────────────────────────────────────────────
     messages:        Annotated[List[dict], operator.add]
     next_step:       str
+    judge_reasoning: Optional[str]          # judge's reasoning — used by deliver for clarification/unsupported
     final_report:    Optional[str]          # patient-facing delivery message (reshaped by manager)
 
     steps: Annotated[List[dict], operator.add]

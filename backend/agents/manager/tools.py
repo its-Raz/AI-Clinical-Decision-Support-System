@@ -14,7 +14,8 @@ def judge_decision(
         "blood_test_analysis",
         "image_lesion_analysis",
         "evidence_analyst",
-        "unsupported"
+        "unsupported",
+        "clarification_needed"
     ],
     reasoning: str,
     overridden: bool,
@@ -27,6 +28,8 @@ def judge_decision(
     Args:
         accepted_category: The final category you are committing to.
         reasoning: One sentence explaining why you accepted or overrode the proposal.
+                   If clarification_needed, set reasoning to EXACTLY:
+                   "Please clarify your request: analyze my blood test, ask a medical question, or analyze a skin image."
         overridden: True if you are changing the router's proposal, False if accepting it.
     """
     return {

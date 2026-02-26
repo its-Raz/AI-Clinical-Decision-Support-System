@@ -83,6 +83,7 @@ def manager_node(state: dict, llm) -> dict:
         "image_lesion_analysis": "skin_care_analyst",
         "evidence_analyst":      "evidence_analyst",
         "unsupported":           "deliver",
+        "clarification_needed":  "deliver",
     }
     next_step = route_map.get(accepted_category, "deliver")
 
@@ -124,10 +125,11 @@ def manager_node(state: dict, llm) -> dict:
     }
 
     return {
-        "request_type": accepted_category,
-        "next_step": next_step,
-        "messages": [trace_msg],
-        "steps": [judge_step, tool_step],
+        "request_type":   accepted_category,
+        "next_step":      next_step,
+        "judge_reasoning": reasoning,
+        "messages":       [trace_msg],
+        "steps":          [judge_step, tool_step],
     }
 
 
@@ -152,6 +154,27 @@ def deliver_node(state: dict, llm) -> dict:
     print(f"   patient_id      : {patient_id}")
     print(f"   request_type    : {request_type}")
     print(f"   next_step       : {next_step}")
+
+    # ── Short-circuit: no LLM call needed for these cases ─────────────
+    if request_type == "clarification_needed":
+        judge_reasoning = state.get("judge_reasoning", "")
+        final_report = judge_reasoning or (
+            "Please clarify your request: analyze my blood test, "
+            "ask a medical question, or analyze a skin image."
+        )
+        print(f"   ↳ clarification_needed — returning judge reasoning directly")
+        return _deliver_static_response(patient_id, request_type, final_report)
+
+    if request_type == "unsupported":
+        final_report = (
+            "I'm sorry, I can only assist with medical questions. "
+            "Please try one of the following:\n"
+            "- \"Analyze my blood test results\"\n"
+            "- \"Explain what high glucose means\"\n"
+            "- \"Analyze my skin image\""
+        )
+        print(f"   ↳ unsupported — returning static message directly")
+        return _deliver_static_response(patient_id, request_type, final_report)
 
     # ── Determine which insights field to read ─────────────────────────
     if request_type == "blood_test_analysis":
@@ -268,6 +291,28 @@ def deliver_node(state: dict, llm) -> dict:
         "final_report": final_report,
         "messages": [patient_msg, trace_msg],
         "steps": [deliver_step],
+    }
+
+
+def _deliver_static_response(patient_id: str, request_type: str, message: str) -> dict:
+    """Return a static final_report without calling the LLM."""
+    patient_msg = {"role": "assistant", "content": message}
+    trace_msg   = {
+        "role": "system",
+        "content": (
+            f"[deliver_node] Static response for {patient_id} "
+            f"({request_type}). Length: {len(message)} chars."
+        ),
+    }
+    deliver_step = {
+        "module":   "Deliver Node",
+        "prompt":   f"[static — no LLM call] request_type={request_type}",
+        "response": message,
+    }
+    return {
+        "final_report": message,
+        "messages":     [patient_msg, trace_msg],
+        "steps":        [deliver_step],
     }
 
 

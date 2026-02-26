@@ -54,6 +54,7 @@ class ManagerAgent:
             openai_api_key=api_key,
             base_url=cfg.get("base_url"),
             max_tokens=cfg.get("max_tokens"),
+            reasoning_effort="low"
         )
 
         print("   ✅ LLM ready")
@@ -100,10 +101,11 @@ class ManagerAgent:
             "manager",
             route_after_manager,
             {
-                "blood_test_analyst": "blood_test_analyst",
-                "skin_care_analyst":  "skin_care_analyst",
-                "evidence_analyst": "evidence_analyst",
-                "deliver":            "deliver",
+                "blood_test_analyst":   "blood_test_analyst",
+                "skin_care_analyst":    "skin_care_analyst",
+                "evidence_analyst":     "evidence_analyst",
+                "clarification_needed": "deliver",
+                "deliver":              "deliver",
             },
         )
         workflow.add_edge("blood_test_analyst", "deliver")

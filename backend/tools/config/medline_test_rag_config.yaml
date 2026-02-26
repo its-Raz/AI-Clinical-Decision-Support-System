@@ -8,10 +8,10 @@ knowledge_bases:
     LLM_model: "RPRTHPB-gpt-5-mini"
     embedding_dimensions: 512
     bm25_k: 20
-    vector_k: 20
+    vector_k: 4
     bm25_weight: 0.0
     vector_weight: 1.0
-    final_k: 5
+    final_k: 2
 
 
 # RRF Configuration
@@ -30,4 +30,4 @@ reranker:
 LLM:
   base_url: "https://api.llmod.ai/v1"
   api_key_env: "OPENAI_API_KEY"
-  max_tokens: 5000
+  max_tokens: 400

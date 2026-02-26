@@ -187,7 +187,8 @@ class MedlineTestRAG:
             openai_api_key=api_key,
             base_url=self.config.LLM.base_url,
             temperature = 1,
-            max_tokens = self.config.LLM.max_tokens
+            max_tokens = self.config.LLM.max_tokens,
+            reasoning_effort="low"
 
         )
 

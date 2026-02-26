@@ -17,7 +17,7 @@ Install dependencies if needed:
 import sys
 import os
 import logging
-
+import time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from fastapi import FastAPI, HTTPException
@@ -409,10 +409,14 @@ async def execute(body: ExecuteRequest):
         }, status_code=400)
 
     steps: list[dict] = []
+    execute_start = time.perf_counter()
+    print(f"⏱ [execute] Pipeline started for prompt: {user_prompt[:80]!r}")
 
     try:
         # ── Step 1: Semantic routing ──────────────────────────────────────
+        t0 = time.perf_counter()
         route_result      = route_request(user_prompt)
+        print(f"⏱ [execute] SemanticRouter completed in {time.perf_counter() - t0:.3f}s")
         proposed_category = route_result["category"]
         router_score      = route_result["score"]
         router_confidence = route_result["confidence"]
@@ -444,6 +448,7 @@ async def execute(body: ExecuteRequest):
             })
 
         # ── Build state ───────────────────────────────────────────────────
+        t0 = time.perf_counter()
         # For blood test analysis the API uses the first available patient's
         # most recent lab results from Supabase as a demonstration dataset.
         # For skin care analysis the demo image is used automatically by
@@ -505,12 +510,16 @@ async def execute(body: ExecuteRequest):
             )
 
         # ── Execute full pipeline ─────────────────────────────────────────
+        print(f"⏱ [execute] State build completed in {time.perf_counter() - t0:.3f}s  (category={proposed_category})")
+        t0 = time.perf_counter()
         final_state  = execute_pipeline(initial_state)
+        print(f"⏱ [execute] execute_pipeline completed in {time.perf_counter() - t0:.3f}s")
         final_report = final_state.get("final_report") or ""
 
         # ── Build structured steps ────────────────────────────────────────
         steps = _build_steps_from_state(route_result, user_prompt, final_state)
 
+        print(f"⏱ [execute] Total pipeline time: {time.perf_counter() - execute_start:.3f}s")
         return JSONResponse(content={
             "status":   "ok",
             "error":    None,
@@ -520,6 +529,7 @@ async def execute(body: ExecuteRequest):
 
     except Exception as exc:
         log.exception("execute: pipeline failed")
+        print(f"⏱ [execute] Pipeline FAILED after {time.perf_counter() - execute_start:.3f}s — {exc}")
         return JSONResponse(
             status_code=500,
             content={

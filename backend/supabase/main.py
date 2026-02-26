@@ -13,8 +13,8 @@ def insert_abnormal_test():
 
     # הגדרת הבדיקה החדשה:
     # Glucose: 178 (High - סוכרת לא מאוזנת)
-    # Hemoglobin: 10.2 (Low - אנמיה)
-    # Creatinine: 1.4 (High - תפקוד כליות גבולי)
+    # Hemoglobin: 14.0 (Normal - תקין)
+    # Creatinine: 0.9 (Normal - תקין)
     new_lab_entry = {
         "date": datetime.now().strftime("%Y-%m-%d"),
         "Glucose": {
@@ -23,14 +23,14 @@ def insert_abnormal_test():
             "flag": "high"
         },
         "Hemoglobin": {
-            "value": 10.2,
+            "value": 14.0,  # ערך תקין לחלוטין
             "unit": "g/dL",
-            "flag": "low"
+            "flag": "normal" # דגל תקין
         },
         "Creatinine": {
-            "value": 1.4,
+            "value": 0.9,   # ערך תקין לחלוטין
             "unit": "mg/dL",
-            "flag": "high"
+            "flag": "normal" # דגל תקין
         }
     }
 

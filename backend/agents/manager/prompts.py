@@ -27,7 +27,7 @@ Write a patient-friendly message that:
 3. Explains what each abnormal result means (use "###" headers for each test)
 4. Lists next steps
 
-Keep explanations simple and warm. Make it 300-500 words total.
+Keep explanations simple and warm. Make it maximum 300 words total.
 
 Message:"""
 
