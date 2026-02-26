@@ -14,22 +14,27 @@ from langchain_core.tools import tool
 _MODEL_PATH = os.path.join(
     os.path.dirname(__file__), "models", "yolov11_skin_care_ob_det_classifier.pt"
 )
-_model = None  # Lazy-loaded singleton
 
-# Map raw YOLO class names → human-readable label + clinical hint
-_CLASS_META = {
-    "Low_Urgency_nv":   {"label": "Low Urgency",  "finding": "nevus (benign mole)"},
-    "High_Urgency_mel": {"label": "High Urgency",  "finding": "possible melanoma"},
+# ── MOCKUP — replace with real model when ready ───────────────────────────
+_MOCK_RESULT = {
+    "bbox":      [100.0, 120.0, 340.0, 360.0],
+    "raw_class": "Low_Urgency_nv",
+    "label":     "Low Urgency",
+    "finding":   "nevus (benign mole)",
+    "conf":      0.9717,
 }
+
+_model = None  # reserved for real model
 
 
 def _load_model():
-    """Load YOLO model once and cache it."""
-    global _model
-    if _model is None:
-        from ultralytics import YOLO
-        _model = YOLO(_MODEL_PATH)
-    return _model
+    """Mockup — no model loaded."""
+    pass
+
+
+def preload_model():
+    """Mockup — nothing to preload."""
+    print("✅ [tools] YOLO mockup active — no model loaded")
 
 
 @tool
@@ -50,35 +55,6 @@ def classify_skin_lesion(image_path: str) -> Dict[str, Any]:
     if not os.path.exists(image_path):
         return {"error": f"Image not found at path: {image_path}"}
 
-    try:
-        model = _load_model()
-        results = model(image_path)[0]
-
-        if not results.boxes:
-            return {"error": "No lesion detected in the image."}
-
-        # Take the highest-confidence detection
-        box      = results.boxes[0]
-        bbox     = box.xyxy[0].tolist()           # [x1, y1, x2, y2]
-        conf     = round(float(box.conf[0]), 4)
-        class_id = int(box.cls[0])
-        raw_class = results.names[class_id]       # "Low_Urgency_nv" or "High_Urgency_mel"
-
-        meta = _CLASS_META.get(raw_class, {"label": raw_class, "finding": "unknown"})
-
-        return {
-            "bbox":      bbox,
-            "raw_class": raw_class,
-            "label":     meta["label"],
-            "finding":   meta["finding"],
-            "conf":      conf,
-        }
-
-    except Exception as e:
-        return {"error": f"Classification failed: {str(e)}"}
-
-
-def preload_model():
-    """Explicitly load the YOLO model at startup so first request is not slow."""
-    _load_model()
-    print("✅ [tools] YOLO model loaded and ready")
+    # ── MOCKUP — returns hardcoded result ─────────────────────────────
+    print(f"🟡 [classify_skin_lesion] MOCKUP — returning hardcoded result for: {image_path}")
+    return _MOCK_RESULT

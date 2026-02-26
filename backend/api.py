@@ -104,11 +104,9 @@ async def startup_event():
     print("🚀 [api.py] Running startup initialisation …")
     initialize()
 
-    print("🔧 [api.py] Pre-loading SkinCareAgent + YOLO model …")
+    print("🔧 [api.py] Pre-loading SkinCareAgent …")
     from backend.agents.skin_care_analyst.run import _get_agent
-    from backend.agents.skin_care_analyst.tools import preload_model
     _get_agent()
-    preload_model()
 
     print("🔧 [api.py] Pre-loading RAG singleton …")
     from backend.agents.blood_test_analyst.react_agent.tools import _get_rag
