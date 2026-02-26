@@ -10,6 +10,18 @@ import logging
 
 log = logging.getLogger(__name__)
 
+# ── SkinCareAgent singleton — initialized once, reused across all requests ─
+_skin_care_agent = None
+
+def _get_agent():
+    global _skin_care_agent
+    if _skin_care_agent is None:
+        from backend.agents.skin_care_analyst.agent import SkinCareAgent
+        print("🔧 [run_skin_care_analyst] Initializing SkinCareAgent singleton...")
+        _skin_care_agent = SkinCareAgent()
+        print("✅ [run_skin_care_analyst] SkinCareAgent singleton ready")
+    return _skin_care_agent
+
 # ── Demo image — used whenever no real image_path is provided ─────────────
 # This allows the /api/execute endpoint to demonstrate skin-care analysis
 # without requiring an actual file upload.
@@ -35,8 +47,6 @@ def run_skin_care_analyst(state: dict) -> dict:
     log.debug("run_skin_care_analyst() called")
     print("\n" + "─" * 50)
     print("🩺 [run_skin_care_analyst] ENTER")
-
-    from backend.agents.skin_care_analyst.agent import SkinCareAgent
 
     patient_id = state.get("patient_id", "unknown")
     image_path = state.get("image_path")
@@ -86,7 +96,7 @@ def run_skin_care_analyst(state: dict) -> dict:
 
     try:
         # ── Run the SkinCareAgent ─────────────────────────────────────────
-        agent = SkinCareAgent()
+        agent = _get_agent()
 
         # Build mini-state with the resolved image_path.
         # "steps": [] must be initialised so operator.add can accumulate
