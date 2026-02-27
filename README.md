@@ -325,32 +325,6 @@ Shows:
 
 ---
 
-# 📸 After Running the Agent
-
-![After Run](assets/after_run_agent.png)
-
-After execution:
-
-- The conversation panel contains the formatted answer.
-- The execution trace shows all reasoning steps.
-- The user can scroll through both panels independently.
-- The system remains interactive for new queries.
-
----
-
-# 🔄 Clearing the Interface
-
-Click: Clear
-
-This resets:
-
-- Conversation panel
-- Execution trace panel
-- Input box
-
-The system returns to its initial state.
-
----
 
 # 🧱 UI Layout Structure
 
