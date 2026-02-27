@@ -202,12 +202,10 @@ Returns architecture diagram PNG.
 
 #### Request
 
-```json
 {
   "prompt": "Can you explain my blood test results?"
 }
 
-```json
 {
   "final_response": "...",
   "steps": [
