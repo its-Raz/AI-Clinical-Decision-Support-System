@@ -259,7 +259,7 @@ This triggers the full backend pipeline:
 
 The response appears in the **upper-left Conversation panel**.
 
-![Conversation Output](assets/conversation_part.png)
+![Conversation Output](assets/converseation_part.png)
 
 The response includes:
 
