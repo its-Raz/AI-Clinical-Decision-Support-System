@@ -30,7 +30,7 @@ The system emphasizes:
 
 ## High-Level Flow
 
-![Architecture](arch.png)
+![Architecture](assets/arch.png)
 
 ### Pipeline Stages
 
@@ -74,10 +74,6 @@ The system emphasizes:
 
 **Role:** Orchestrator and safety controller  
 
-Prompt defined in:
-
-`backend/prompts.py`
-
 ### Responsibilities
 
 - Validate semantic router decisions  
@@ -94,11 +90,6 @@ It supervises execution and guarantees safety boundaries.
 ## 2️⃣ Blood Test Analyst
 
 **Architecture:** ReAct-style tool-constrained agent  
-
-Prompts defined in:
-
-`backend/agents/blood_test_analyst/prompts.py`
-
 ### Mandatory Tool Order
 
 The agent enforces deterministic reasoning using tools:
