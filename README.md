@@ -131,10 +131,6 @@ The agent enforces deterministic reasoning using tools:
 
 ## 3️⃣ Skin Care Analyst
 
-Prompts defined in:
-
-`backend/agents/skin_care_analyst/prompts.py`
-
 ### Pipeline
 
 1. YOLOv8 object detection  
@@ -150,7 +146,6 @@ Prompts defined in:
 - **Low Urgency**
 
 ### Safety Rules
-
 - Always state this is an AI screening  
 - Never claim diagnosis  
 - High urgency requires immediate dermatologist visit  
@@ -159,36 +154,15 @@ Prompts defined in:
 ---
 
 ## 4️⃣ Evidence Analyst
-
-Prompts defined in:
-
-`backend/agents/evidence_analyst/prompts.py`
-
-### Architecture
-
+## Key Responsibilities
 - Retrieval-Augmented Generation  
 - Pinecone vector database  
 - MedlinePlus embedded corpus  
 - Maximum 3 retrieval queries per question  
 
-### Strict Behavior
-
-- Must base answer strictly on retrieved content  
-- No hallucinations  
-- If insufficient evidence found, disclose limitation honestly  
-
 ---
 
 # ⚙ Backend Architecture
-
-Core orchestration entry point:
-
-`backend/main.py`
-
-HTTP API layer:
-
-`backend/api.py`
-
 ## Key Responsibilities
 
 - Initialize semantic router once at startup  
@@ -243,3 +217,190 @@ Returns architecture diagram PNG.
     { "module": "Deliver Node", ... }
   ]
 }
+
+
+---
+
+# 🏠 Main Screen Overview
+
+![Main Screen](assets/main_screen.png)
+
+When the application loads, you will see a clean two-panel layout:
+
+### 🔹 Left Panel — Conversation Area  
+### 🔹 Right Panel — Agent Execution Trace  
+### 🔹 Bottom Left — Prompt Input Box  
+### 🔹 Bottom — Run Agent Button  
+
+---
+
+# 🧭 Step-by-Step Usage Guide
+
+## Step 1 — Enter Your Medical Question
+
+At the **bottom-left text area**, you will see a prompt box labeled:
+
+
+Type your medical question here.
+
+Examples:
+
+- "Can you explain my blood test results?"
+- "What are the risks of a hemoglobin level of 18.5 g/dL?"
+- "What are the symptoms of strep throat?"
+
+The system accepts **natural language medical queries**.
+
+---
+
+## Step 2 — Click “Run Agent”
+
+Below the input box, click: Run Agent
+
+This triggers the full backend pipeline:
+
+1. Semantic routing
+2. Manager validation
+3. Specialist agent execution
+4. Final response formatting
+
+---
+
+## Step 3 — View the Response
+
+The response appears in the **upper-left Conversation panel**.
+
+![Conversation Output](assets/conversation_part.png)
+
+The response includes:
+
+- Structured clinical message
+- Lab result tables if applicable
+- Section headers such as:
+  - Glucose
+  - Creatinine
+  - Hemoglobin
+- Clear explanations
+- Recommended next steps
+
+All responses are formatted to be patient-friendly and readable.
+
+---
+
+# 🔍 Agent Execution Trace Panel
+
+On the **right side**, you will see: AGENT EXECUTION TRACE
+
+
+![Execution Trace](assets/execution_steps.png)
+
+This panel displays a **step-by-step breakdown** of the internal reasoning process.
+
+Each step includes:
+
+### Step 1 — Semantic Router
+- Shows proposed category
+- Displays similarity score
+- Indicates confidence level
+- Lists all category scores
+
+### Step 2 — Manager Agent
+- Displays system prompt
+- Shows decision to accept or override routing
+- Logs tool call execution
+
+### Step 3 — Specialist Agent
+Depending on request type:
+
+- Blood Test Analyst
+- Skin Care Analyst
+- Evidence Analyst
+
+Shows:
+- Tool calls
+- Retrieved data
+- Intermediate reasoning
+- Structured analysis
+
+### Step 4 — Deliver Node
+- Final transformation into patient-friendly output
+
+---
+
+# 📸 After Running the Agent
+
+![After Run](assets/after_run_agent.png)
+
+After execution:
+
+- The conversation panel contains the formatted answer.
+- The execution trace shows all reasoning steps.
+- The user can scroll through both panels independently.
+- The system remains interactive for new queries.
+
+---
+
+# 🔄 Clearing the Interface
+
+Click: Clear
+
+This resets:
+
+- Conversation panel
+- Execution trace panel
+- Input box
+
+The system returns to its initial state.
+
+---
+
+# 🧱 UI Layout Structure
+
+The frontend is divided into:
+
+| Section | Purpose |
+|----------|----------|
+| Header | Displays "Clinical Portal" branding |
+| Conversation Panel | Final patient-facing output |
+| Execution Trace Panel | Transparent reasoning breakdown |
+| Prompt Input Box | User text entry |
+| Run Agent Button | Triggers pipeline |
+| Clear Button | Resets session |
+
+---
+
+# 🧪 Supported Interaction Types
+
+The UI supports:
+
+### 🩸 Blood Test Analysis
+User asks about lab results.
+
+### 🔬 Skin Lesion Screening
+User uploads an image.
+
+### 📚 Evidence-Based Medical Q&A
+User asks general medical questions.
+
+---
+
+# 🎯 Design Goals of the Frontend
+
+- Clean, clinical layout
+- Clear separation of output and reasoning
+- Full transparency
+- Scrollable panels
+- Immediate feedback
+- Professional medical tone
+
+---
+
+# 🚀 Running the Frontend
+
+From project root:
+
+```bash
+streamlit run app.py
+
+Then open:
+http://localhost:8501
